@@ -27,6 +27,7 @@ DEFAULT_SETTLE_MS = {
     "app": 1000,
 }
 MAX_SETTLE_MS = 60_000
+NORMALIZED_COORDINATE_MAX = observations.NORMALIZED_COORDINATE_MAX
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -290,17 +291,25 @@ def _observe(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _device_size(observation: dict[str, Any]) -> tuple[int, int]:
-    return observation.get("device_width", observation["width"]), observation.get(
-        "device_height", observation["height"]
-    )
+    return observation["width"], observation["height"]
 
 
 def _device_point(observation: dict[str, Any], x: int, y: int) -> tuple[int, int]:
+    if not 0 <= x <= NORMALIZED_COORDINATE_MAX:
+        raise MobileSkillError(
+            "invalid_coordinate",
+            f"x coordinate must be between 0 and {NORMALIZED_COORDINATE_MAX}",
+        )
+    if not 0 <= y <= NORMALIZED_COORDINATE_MAX:
+        raise MobileSkillError(
+            "invalid_coordinate",
+            f"y coordinate must be between 0 and {NORMALIZED_COORDINATE_MAX}",
+        )
     device_width, device_height = _device_size(observation)
-    image_width, image_height = observation["width"], observation["height"]
-    if observation.get("full"):
-        return x, y
-    return round(x * device_width / image_width), round(y * device_height / image_height)
+    return (
+        round(x * (device_width - 1) / NORMALIZED_COORDINATE_MAX),
+        round(y * (device_height - 1) / NORMALIZED_COORDINATE_MAX),
+    )
 
 
 def _run_action(args: argparse.Namespace) -> dict[str, Any]:

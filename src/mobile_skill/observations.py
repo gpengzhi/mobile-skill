@@ -11,6 +11,7 @@ from .errors import MobileSkillError
 
 
 DEFAULT_MODEL_WIDTH = 476
+NORMALIZED_COORDINATE_MAX = 999
 
 
 def capture(
@@ -33,29 +34,22 @@ def capture(
     raw_path = directory / f"{observation_id}.png"
     _, (device_width, device_height) = android.capture(serial, raw_path)
     model_path = directory / f"{observation_id}.jpg"
-    _, (compressed_width, compressed_height) = android.compress_for_model(
+    android.compress_for_model(
         raw_path, model_path, target_width=model_width
     )
 
     path = raw_path if full else model_path
-    width, height = (
-        (device_width, device_height) if full else (compressed_width, compressed_height)
-    )
     observation: dict[str, Any] = {
         "id": observation_id,
         "path": str(path),
-        "width": width,
-        "height": height,
+        "width": device_width,
+        "height": device_height,
         "raw_path": str(raw_path),
         "model_path": str(model_path),
-        "device_width": device_width,
-        "device_height": device_height,
-        "model_width": compressed_width,
-        "model_height": compressed_height,
-        "scale": compressed_width / device_width,
+        "coordinate_scale": NORMALIZED_COORDINATE_MAX,
         "full": full,
-        "orientation": "landscape" if width > height else "portrait",
-        "coordinate_space": "device_image_pixels" if full else "model_image_pixels",
+        "orientation": "landscape" if device_width > device_height else "portrait",
+        "coordinate_space": "normalized_0_999",
         "created_at": time.time(),
     }
     state.update_session(session_id, last_observation=observation)

@@ -37,7 +37,8 @@ Always stop the Session, including after errors.
 
 - Open the exact `path` returned by `observe`; receiving a path alone does not mean the model saw the image.
 - Never choose coordinates until the host image tool successfully opens the image.
-- Use coordinates from the viewed image's `width` × `height`; `mobile-skill` maps them to the device.
+- Use normalized coordinates from `0..999`: `(0,0)` is the top-left and `(999,999)` is the bottom-right. `mobile-skill` maps them to the device.
+- Observation `width` and `height` are the original device image dimensions. If measuring a target in the opened model image, use that image's actual displayed dimensions `(image_width, image_height)` and convert pixels `(px, py)` using `x = round(999 * px / (image_width - 1))` and `y = round(999 * py / (image_height - 1))`; never pass image pixels directly to an action.
 - Use the `observation_id` returned with that image for coordinate actions.
 - Treat an observation as stale after a new observation or successful action.
 - Stop with `image_delivery_unavailable` if the host image tool cannot open the image.

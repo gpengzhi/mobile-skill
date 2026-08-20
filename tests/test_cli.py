@@ -5,6 +5,8 @@ from mobile_skill import cli
 
 
 class CliTests(unittest.TestCase):
+    SCREEN_SIZES = ((320, 480), (800, 1280), (1024, 768))
+
     def test_version_reports_runtime_version(self):
         args = cli.build_parser().parse_args(["version"])
 
@@ -32,16 +34,16 @@ class CliTests(unittest.TestCase):
     def test_session_start_runs_automatic_cleanup(self):
         args = cli.build_parser().parse_args(["session", "start"])
         cleanup_result = {"sessions_pruned": ["old1"]}
-        session = {"id": "abcd", "device_id": "serial-1", "state": "active"}
+        session = {"id": "abcd", "device_id": "device-a", "state": "active"}
         with (
-            patch("mobile_skill.cli.android.require_device", return_value="serial-1"),
+            patch("mobile_skill.cli.android.require_device", return_value="device-a"),
             patch("mobile_skill.cli.state.cleanup", return_value=cleanup_result) as cleanup,
             patch("mobile_skill.cli.state.create_session", return_value=session) as create,
         ):
             result = cli._dispatch(args)
 
         cleanup.assert_called_once_with()
-        create.assert_called_once_with("serial-1")
+        create.assert_called_once_with("device-a")
         self.assertEqual(result["cleanup"], cleanup_result)
 
     def test_double_tap_maps_observation_coordinates(self):
@@ -56,25 +58,25 @@ class CliTests(unittest.TestCase):
                 "obs-1",
             ]
         )
-        session = {"id": "abcd"}
-        observation = {
-            "width": 476,
-            "height": 1058,
-            "device_width": 1080,
-            "device_height": 2400,
-        }
-        with (
-            patch("mobile_skill.cli._driver", return_value=(session, "serial-1")),
-            patch("mobile_skill.cli._check_observation", return_value=observation),
-            patch("mobile_skill.cli.android.double_tap") as double_tap,
-            patch("mobile_skill.cli._invalidate_observation") as invalidate,
-        ):
-            result = cli._dispatch(args)
+        expected_points = ((76, 254), (190, 677), (244, 406))
+        for screen_size, expected_point in zip(self.SCREEN_SIZES, expected_points):
+            with self.subTest(screen_size=screen_size):
+                session = {"id": "abcd"}
+                observation = {"width": screen_size[0], "height": screen_size[1]}
+                with (
+                    patch("mobile_skill.cli._driver", return_value=(session, "device-a")),
+                    patch("mobile_skill.cli._check_observation", return_value=observation),
+                    patch("mobile_skill.cli.android.double_tap") as double_tap,
+                    patch("mobile_skill.cli._invalidate_observation") as invalidate,
+                ):
+                    result = cli._dispatch(args)
 
-        double_tap.assert_called_once_with("serial-1", 540, 1200, 100, (1080, 2400))
-        invalidate.assert_called_once_with("abcd")
-        self.assertEqual(result["action"], "double-tap")
-        self.assertEqual(result["interval_ms"], 100)
+                double_tap.assert_called_once_with(
+                    "device-a", *expected_point, 100, screen_size
+                )
+                invalidate.assert_called_once_with("abcd")
+                self.assertEqual(result["action"], "double-tap")
+                self.assertEqual(result["interval_ms"], 100)
 
     def test_tap_observe_after_uses_default_settle_and_returns_observation(self):
         args = cli.build_parser().parse_args(
@@ -89,23 +91,18 @@ class CliTests(unittest.TestCase):
                 "--observe-after",
             ]
         )
-        session = {"id": "abcd"}
-        observation = {
-            "width": 476,
-            "height": 1058,
-            "device_width": 1080,
-            "device_height": 2400,
-        }
         captured = {
             "ok": True,
             "type": "observation",
             "session_id": "abcd",
-            "device_id": "serial-1",
+            "device_id": "device-a",
             "observation_id": "obs-2",
             "path": "/tmp/obs-2.jpg",
         }
+        session = {"id": "abcd"}
+        observation = {"width": 800, "height": 1280}
         with (
-            patch("mobile_skill.cli._driver", return_value=(session, "serial-1")),
+            patch("mobile_skill.cli._driver", return_value=(session, "device-a")),
             patch("mobile_skill.cli._check_observation", return_value=observation),
             patch("mobile_skill.cli.android.tap") as tap,
             patch("mobile_skill.cli.android.wait") as wait,
@@ -115,16 +112,33 @@ class CliTests(unittest.TestCase):
         ):
             result = cli._dispatch(args)
 
-        tap.assert_called_once_with("serial-1", 540, 1200, (1080, 2400))
+        tap.assert_called_once_with("device-a", 190, 677, (800, 1280))
         wait.assert_called_once_with(300)
         invalidate.assert_called_once_with("abcd")
-        capture.assert_called_once_with("abcd", serial="serial-1")
+        capture.assert_called_once_with("abcd", serial="device-a")
         self.assertEqual(
             result["settle"],
             {"source": "default", "requested_ms": 300, "actual_ms": 301},
         )
         self.assertEqual(result["next_observation"]["observation_id"], "obs-2")
         self.assertNotIn("ok", result["next_observation"])
+
+    def test_normalized_coordinates_map_to_device_edges(self):
+        for width, height in self.SCREEN_SIZES:
+            with self.subTest(screen_size=(width, height)):
+                observation = {"width": width, "height": height}
+                self.assertEqual(cli._device_point(observation, 0, 0), (0, 0))
+                self.assertEqual(
+                    cli._device_point(observation, 999, 999), (width - 1, height - 1)
+                )
+
+    def test_normalized_coordinates_reject_values_outside_range(self):
+        observation = {"width": 320, "height": 480}
+
+        with self.assertRaises(cli.MobileSkillError) as caught:
+            cli._device_point(observation, 1000, 500)
+
+        self.assertEqual(caught.exception.code, "invalid_coordinate")
 
     def test_back_observe_after_accepts_settle_override(self):
         args = cli.build_parser().parse_args(
@@ -142,12 +156,12 @@ class CliTests(unittest.TestCase):
             "ok": True,
             "type": "observation",
             "session_id": "abcd",
-            "device_id": "serial-1",
+            "device_id": "device-a",
             "observation_id": "obs-2",
             "path": "/tmp/obs-2.jpg",
         }
         with (
-            patch("mobile_skill.cli._driver", return_value=(session, "serial-1")),
+            patch("mobile_skill.cli._driver", return_value=(session, "device-a")),
             patch("mobile_skill.cli.android.back") as back,
             patch("mobile_skill.cli.android.wait") as wait,
             patch("mobile_skill.cli._invalidate_observation"),
@@ -156,7 +170,7 @@ class CliTests(unittest.TestCase):
         ):
             result = cli._dispatch(args)
 
-        back.assert_called_once_with("serial-1")
+            back.assert_called_once_with("device-a")
         wait.assert_called_once_with(25)
         self.assertEqual(
             result["settle"],
@@ -179,7 +193,7 @@ class CliTests(unittest.TestCase):
         )
         session = {"id": "abcd"}
         with (
-            patch("mobile_skill.cli._driver", return_value=(session, "serial-1")),
+            patch("mobile_skill.cli._driver", return_value=(session, "device-a")),
             patch("mobile_skill.cli.android.back"),
             patch("mobile_skill.cli._invalidate_observation"),
             patch(

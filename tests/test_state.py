@@ -23,11 +23,11 @@ class StateTests(unittest.TestCase):
     def test_session_lifecycle(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch.dict(os.environ, {"MOBILE_SKILL_HOME": directory}):
-                created = state.create_session("serial-1")
+                created = state.create_session("device-a")
                 self.assertEqual(created["state"], "active")
-                self.assertEqual(state.get_session(created["id"])["device_id"], "serial-1")
+                self.assertEqual(state.get_session(created["id"])["device_id"], "device-a")
                 with self.assertRaises(RuntimeError):
-                    state.create_session("serial-1")
+                    state.create_session("device-a")
                 state.update_session(created["id"], last_observation={"id": "obs-1"})
                 self.assertEqual(
                     state.get_session(created["id"])["last_observation"]["id"], "obs-1"
@@ -41,7 +41,7 @@ class StateTests(unittest.TestCase):
     def test_user_takeover_lifecycle(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch.dict(os.environ, {"MOBILE_SKILL_HOME": directory}):
-                created = state.create_session("serial-1")
+                created = state.create_session("device-a")
                 state.update_session(created["id"], last_observation={"id": "obs-1"})
 
                 waiting = state.request_help(

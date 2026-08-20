@@ -9,7 +9,7 @@ Provide reliable screenshot-driven Android GUI navigation for local coding Agent
 Supported:
 
 - USB ADB device discovery and validation
-- Screenshot capture, JPEG compression, and coordinate mapping
+- Screenshot capture, JPEG compression, and normalized `0..999` coordinate mapping
 - Tap, double-tap, long-press, swipe, wait, text input, key presses, and App launch
 - Session lease, stale observation protection, pause/resume, and human takeover
 - Codex and Claude Code Skill installation from a source checkout

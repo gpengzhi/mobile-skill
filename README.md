@@ -55,6 +55,8 @@ msk --json session stop <id>
 
 The model must open the exact returned image before choosing coordinates. Every successful action invalidates the previous observation.
 
+Coordinate actions always use normalized coordinates from `0..999`: `(0,0)` is the top-left and `(999,999)` is the bottom-right, regardless of the observation image size or whether `--full` is used. Observation `width` and `height` are the original device image dimensions. If measuring pixels in the opened model image, use that image's actual displayed dimensions and convert with `x = round(999 * px / (image_width - 1))` and `y = round(999 * py / (image_height - 1))` before calling an action.
+
 ## Actions
 
 ```bash

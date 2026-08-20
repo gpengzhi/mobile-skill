@@ -9,12 +9,12 @@ class DiagnosticsTests(unittest.TestCase):
         with (
             patch(
                 "mobile_skill.diagnostics.android.list_devices",
-                return_value=[{"serial": "serial-1", "state": "device"}],
+                return_value=[{"serial": "device-a", "state": "device"}],
             ),
-            patch("mobile_skill.diagnostics.android.screen_size", return_value=(1080, 2400)),
+            patch("mobile_skill.diagnostics.android.screen_size", return_value=(321, 654)),
             patch(
                 "mobile_skill.diagnostics.android.capture",
-                return_value=(unittest.mock.Mock(), (1080, 2400)),
+                return_value=(unittest.mock.Mock(), (321, 654)),
             ),
             patch(
                 "mobile_skill.diagnostics.android.input_capabilities",
@@ -34,12 +34,12 @@ class DiagnosticsTests(unittest.TestCase):
         with (
             patch(
                 "mobile_skill.diagnostics.android.list_devices",
-                return_value=[{"serial": "serial-1", "state": "device"}],
+                return_value=[{"serial": "device-a", "state": "device"}],
             ),
-            patch("mobile_skill.diagnostics.android.screen_size", return_value=(1080, 2400)),
+            patch("mobile_skill.diagnostics.android.screen_size", return_value=(321, 654)),
             patch(
                 "mobile_skill.diagnostics.android.capture",
-                return_value=(unittest.mock.Mock(), (1080, 2400)),
+                return_value=(unittest.mock.Mock(), (321, 654)),
             ),
             patch(
                 "mobile_skill.diagnostics.android.input_capabilities",
@@ -60,8 +60,8 @@ class DiagnosticsTests(unittest.TestCase):
             patch(
                 "mobile_skill.diagnostics.android.list_devices",
                 return_value=[
-                    {"serial": "serial-1", "state": "device"},
-                    {"serial": "serial-2", "state": "device"},
+                    {"serial": "device-a", "state": "device"},
+                    {"serial": "device-b", "state": "device"},
                 ],
             ),
             patch("mobile_skill.diagnostics.android.capture") as capture,
