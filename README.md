@@ -2,14 +2,16 @@
   <img src="assets/mobile-skill-banner.png" alt="mobile-skill banner" width="100%">
   <br>
   <br>
-  <strong>Screenshot-driven GUI control for AI agents</strong>
+  <strong>Screenshot-driven mobile control for multimodal coding agents</strong>
   <br>
-  <sub>Give your coding agent eyes, coordinates, and a real mobile device.</sub>
+  <sub>Give multimodal coding agents a reliable interface for real mobile devices.</sub>
 </div>
 
 <br>
 
-`mobile-skill` is a tiny CLI that lets Codex or Claude Code control a real mobile device by looking at screenshots and performing one verified action at a time.
+`mobile-skill` is a lightweight skill that enables multimodal coding agents to control real mobile devices through screenshots and verified actions.
+
+The multimodal model interprets screenshots and verifies outcomes, while `mobile-skill` handles device connectivity, screenshot capture, normalized coordinate mapping, and atomic actions.
 
 ## Install
 
@@ -38,24 +40,24 @@ Keep the checkout in place after installation because the installer uses symlink
 
 ## Try it
 
-```bash
-msk --json session start
-msk --json observe --session <session-id>
+Open Codex or Claude Code with a multimodal model that can inspect images, then describe the mobile task in natural language.
+
+For Codex:
+
+```text
+Use $mobile-skill to open Settings on my connected phone and tell me what screen is visible. Do not change any settings.
 ```
 
-Open the returned image, then perform an action using normalized coordinates from `0..999`:
+For Claude Code:
 
-```bash
-msk --json tap 500 500 \
-  --session <session-id> \
-  --observation <observation-id> \
-  --observe-after
+```text
+Use mobile-skill to open Settings on my connected phone and tell me what screen is visible. Do not change any settings.
 ```
 
-Repeat the observe → inspect → action loop, then stop the session:
+The agent will run the screenshot → inspect → action → verify loop for you. You can also give it a complete task, for example:
 
-```bash
-msk --json session stop <session-id>
+```text
+Use mobile-skill to open the calculator, calculate 128 × 64, and report the result.
 ```
 
 ## Why it feels different
