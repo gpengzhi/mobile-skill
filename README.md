@@ -1,112 +1,75 @@
-# mobile-skill
+<div align="center">
+  <img src="assets/mobile-skill-banner.png" alt="mobile-skill banner" width="100%">
+  <br>
+  <br>
+  <strong>Screenshot-driven GUI control for AI agents</strong>
+  <br>
+  <sub>Give your coding agent eyes, coordinates, and a real mobile device.</sub>
+</div>
 
-![mobile-skill banner](assets/mobile-skill-banner.png)
+<br>
 
-Minimal screenshot-driven GUI control for a real Android phone.
-
-`mobile-skill` gives Codex or Claude Code a small atomic CLI:
-
-```text
-observe screenshot → inspect image → run one action → observe again
-```
-
-It intentionally does not use OCR, UI trees, accessibility trees, Deep Links, generated control scripts, a daemon, or a phone-side companion App.
-
-Naming is consistent across interfaces: the project and Agent Skill are `mobile-skill`, the CLI command is `msk`, and the Python package is `mobile_skill`.
-
-## Requirements
-
-- Python 3.11+
-- Android platform-tools (`adb`)
-- One unlocked Android phone with USB debugging authorized
-- Codex CLI or Claude Code
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-```
+`mobile-skill` is a tiny CLI that lets Codex or Claude Code control a real mobile device by looking at screenshots and performing one verified action at a time.
 
 ## Install
 
-Run from this source checkout:
+Requirements: Python 3.11+, `adb`, and an unlocked Android device with USB debugging enabled.
 
 ```bash
+git clone https://github.com/gpengzhi/mobile-skill.git
+cd mobile-skill
+
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+
 ./msk install codex
 ./msk --json doctor --agent codex
 ```
 
-Or for Claude Code:
+For Claude Code, use:
 
 ```bash
 ./msk install claude-code
 ./msk --json doctor --agent claude-code
 ```
 
-The installer creates symlinks to this checkout. Moving or deleting the checkout breaks those links.
+Keep the checkout in place after installation because the installer uses symlinks.
 
-## Required Loop
+## Try it
 
 ```bash
 msk --json session start
-msk --json observe --session <id>
-# Open the returned image path with view_image or Read.
-msk --json tap X Y --session <id> --observation <obs-id> --observe-after
-msk --json session stop <id>
+msk --json observe --session <session-id>
 ```
 
-The model must open the exact returned image before choosing coordinates. Every successful action invalidates the previous observation.
-
-Coordinate actions always use normalized coordinates from `0..999`: `(0,0)` is the top-left and `(999,999)` is the bottom-right, regardless of the observation image size or whether `--full` is used. Observation `width` and `height` are the original device image dimensions. If measuring pixels in the opened model image, use that image's actual displayed dimensions and convert with `x = round(999 * px / (image_width - 1))` and `y = round(999 * py / (image_height - 1))` before calling an action.
-
-## Actions
+Open the returned image, then perform an action using normalized coordinates from `0..999`:
 
 ```bash
-msk --json tap X Y --session <id> --observation <obs-id>
-msk --json double-tap X Y --session <id> --observation <obs-id>
-msk --json long-press X Y --session <id> --observation <obs-id>
-msk --json swipe X1 Y1 X2 Y2 --session <id> --observation <obs-id>
-msk --json type "text" --session <id>
-msk --json press return --session <id>
-msk --json home --session <id>
-msk --json back --session <id>
-msk --json app-switcher --session <id>
-msk --json app open com.android.settings --session <id>
-msk --json wait --duration 500 --session <id>
+msk --json tap 500 500 \
+  --session <session-id> \
+  --observation <observation-id> \
+  --observe-after
 ```
 
-Add `--observe-after` to an action to receive the next screenshot in the same response. Use `--settle-ms` only when the default wait is unsuitable.
-
-## Human Takeover
-
-Passwords, OTPs, PINs, biometrics, payments, private information, and permission decisions belong to the user:
+Repeat the observe → inspect → action loop, then stop the session:
 
 ```bash
-msk --json request-help --session <id> \
-  --reason login_required \
-  --message "Please finish signing in on the phone."
-
-msk --json session resume <id>
+msk --json session stop <session-id>
 ```
 
-Always observe a fresh image after resuming.
+## Why it feels different
 
-## State and Cleanup
+- **Visual by default** — act on the screenshot the agent actually inspected.
+- **Simple primitives** — tap, swipe, type, press, navigate, and launch apps.
+- **Device-independent coordinates** — the same `0..999` coordinate space works across screen sizes.
+- **Safe interaction loop** — stale observations are rejected and every action can be verified.
 
-Sessions and screenshots are stored under `~/.local/state/mobile-skill` by default. Stopped Sessions are retained for seven days.
+Current backend: Android over USB ADB. The interaction model is designed to support more mobile platforms over time.
 
-```bash
-msk --json session list
-msk --json cleanup --dry-run
-msk --json cleanup
-```
+## Learn more
 
-Use `MOBILE_SKILL_HOME` to move state and `MOBILE_SKILL_RETENTION_DAYS` to change retention.
+- Skill instructions: [`skill/SKILL.md`](skill/SKILL.md)
+- Project scope: [`docs/project-plan.md`](docs/project-plan.md)
 
-## Development
-
-```bash
-./msk --json version
-```
-
-Current focus and scope are recorded in `docs/project-plan.md`.
+No OCR, UI trees, accessibility selectors, generated scripts, daemon, or phone-side companion app required.
