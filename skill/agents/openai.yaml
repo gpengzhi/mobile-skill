@@ -1,0 +1,7 @@
+interface:
+  display_name: "mobile-skill"
+  short_description: "Control Android with screenshots and atomic GUI actions"
+  default_prompt: "Use $mobile-skill to operate my connected Android phone safely through screenshot-driven GUI navigation."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,12 @@
+#!/bin/sh
+SOURCE=$0
+while [ -h "$SOURCE" ]; do
+    DIR="$(CDPATH= cd -- "$(dirname -- "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    case "$SOURCE" in
+        /*) ;;
+        *) SOURCE="$DIR/$SOURCE" ;;
+    esac
+done
+DIR="$(CDPATH= cd -- "$(dirname -- "$SOURCE")" && pwd)"
+PYTHONPATH="$DIR/src${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m mobile_skill "$@"
