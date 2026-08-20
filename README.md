@@ -1,5 +1,7 @@
 # mobile-skill
 
+![mobile-skill banner](assets/mobile-skill-banner.png)
+
 Minimal screenshot-driven GUI control for a real Android phone.
 
 `mobile-skill` gives Codex or Claude Code a small atomic CLI:
