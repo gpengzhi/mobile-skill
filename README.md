@@ -104,7 +104,6 @@ Use `MOBILE_SKILL_HOME` to move state and `MOBILE_SKILL_RETENTION_DAYS` to chang
 ## Development
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
 ./msk --json version
 ```
 
