@@ -10,8 +10,6 @@ import subprocess
 import time
 from pathlib import Path
 
-from PIL import Image
-
 from .errors import MobileSkillError
 
 
@@ -213,6 +211,12 @@ def compress_for_model(
         raise AndroidError("model image width must be positive")
     if not 1 <= quality <= 95:
         raise AndroidError("JPEG quality must be between 1 and 95")
+    try:
+        from PIL import Image
+    except ImportError as error:
+        raise AndroidError(
+            "Pillow is not installed", "pillow_not_found", "pip install Pillow"
+        ) from error
 
     with Image.open(input_path) as source:
         width, height = source.size

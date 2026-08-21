@@ -10,9 +10,27 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import PIL
+try:
+    import PIL
+except ImportError:
+    PIL = None
 
 from . import android, state
+
+
+PILLOW_REQUIRED_MAJOR = 10
+
+
+def _pillow_check() -> dict[str, Any]:
+    if PIL is None:
+        return _check("missing", hint="pip install Pillow")
+    major = PIL.__version__.partition(".")[0]
+    ready = major.isdigit() and int(major) >= PILLOW_REQUIRED_MAJOR
+    return _check(
+        "ready" if ready else "unsupported",
+        version=PIL.__version__,
+        required=f">={PILLOW_REQUIRED_MAJOR}",
+    )
 
 
 def _check(status: str, **details: Any) -> dict[str, Any]:
@@ -104,7 +122,7 @@ def doctor(agent: str | None = None) -> dict[str, Any]:
             version=".".join(map(str, sys.version_info[:3])),
             required=">=3.11",
         ),
-        "pillow": _check("ready", version=PIL.__version__, required=">=10"),
+        "pillow": _pillow_check(),
         "adb": _check("ready", path=android.adb_path()),
         "device": _check(
             device_status,
@@ -131,8 +149,10 @@ def doctor(agent: str | None = None) -> dict[str, Any]:
             checks["screen"] = _check("error", message=str(error))
         try:
             with tempfile.TemporaryDirectory(prefix="mobile-skill-doctor-") as directory:
-                _, capture_size = android.capture(serial, Path(directory, "screen.png"))
-            checks["screenshot"] = _check("ready", size=capture_size)
+                raw_path = Path(directory, "screen.png")
+                _, capture_size = android.capture(serial, raw_path)
+                _, model_size = android.compress_for_model(raw_path, Path(directory, "screen.jpg"))
+            checks["screenshot"] = _check("ready", size=capture_size, model_size=model_size)
         except Exception as error:
             checks["screenshot"] = _check("error", message=str(error))
         try:
