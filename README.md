@@ -11,7 +11,7 @@
 
 `mobile-skill` is a lightweight skill that enables multimodal coding agents to control real mobile devices through screenshots and verified actions.
 
-The multimodal model interprets screenshots and verifies outcomes, while `mobile-skill` handles device connectivity, screenshot capture, normalized coordinate mapping, and atomic actions.
+The multimodal model interprets screenshots and verifies outcomes, while `mobile-skill` handles device connectivity, screenshot capture, normalized coordinate mapping, atomic actions, and the safety loop that keeps every action accountable to what the model actually saw.
 
 ## Install
 
@@ -47,12 +47,22 @@ Use mobile-skill to open the calculator, calculate 128 × 64, and report the res
 
 ## Why it feels different
 
+- **A lease on reality, not a screenshot cache** — coordinate actions must cite the observation they are based on; anything older is rejected as `stale_observation`.
+- **No blind retries** — when an action succeeds but the follow-up capture fails, the error reports `action_applied: true`, so the agent never repeats a side-effecting action.
+- **Human takeover built in** — passwords, OTPs, payments, and permission dialogs pause the session (`request-help`) instead of being brute-forced; `mobile-skill` never enters a PIN.
 - **Visual by default** — act on the screenshot the agent actually inspected.
 - **Simple primitives** — tap, swipe, type, press, navigate, and launch apps.
 - **Device-independent coordinates** — the same `0..999` coordinate space works across screen sizes.
-- **Safe interaction loop** — stale observations are rejected and every action can be verified.
 
 Current backend: Android over USB ADB. The interaction model is designed to support more mobile platforms over time.
+
+## Limits
+
+- **Needs a model that really sees images.** With a text-only model, the host image tool can deliver a screenshot as a link instead of pixels. `msk doctor` reports `vision: unverified` because only a real task can prove image understanding.
+- **One Android phone over USB.** Multi-device selection, Wi-Fi adb, and iOS are not supported yet.
+- **Popups and login walls stop the loop.** Apps that demand login on launch — common in the Chinese app ecosystem — trigger human takeover by design; `mobile-skill` never types credentials.
+- **Animation is judged, not detected.** Post-action waits use conservative per-action defaults and the model is told to re-observe transitional frames, but a decelerating fling can still look still in a single frame.
+- **No OCR, accessibility trees, or selectors.** Grounding precision is bounded by the model's vision; there is no structured fallback.
 
 ## Learn more
 
