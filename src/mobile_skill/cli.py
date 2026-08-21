@@ -333,7 +333,12 @@ def _run_action(args: argparse.Namespace) -> dict[str, Any]:
     elif args.command == "long-press":
         x, y = _device_point(observation, args.x, args.y)
         android.long_press(serial, x, y, args.duration_ms, size)
-        action = {"action": "long-press", "x": args.x, "y": args.y, "duration_ms": args.duration_ms}
+        action = {
+            "action": "long-press",
+            "x": args.x,
+            "y": args.y,
+            "duration_ms": args.duration_ms,
+        }
     else:
         x1, y1 = _device_point(observation, args.x1, args.y1)
         x2, y2 = _device_point(observation, args.x2, args.y2)

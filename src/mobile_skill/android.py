@@ -230,8 +230,8 @@ def compress_for_model(
 
 
 def wait(duration_ms: int) -> None:
-    if duration_ms <= 0:
-        raise AndroidError("wait duration must be positive")
+    if duration_ms < 0:
+        raise AndroidError("wait duration must not be negative")
     if duration_ms > 60_000:
         raise AndroidError("wait duration must be no more than 60000 milliseconds")
     time.sleep(duration_ms / 1000)
