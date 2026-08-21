@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shutil
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -89,6 +91,16 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+@contextmanager
+def _locked():
+    """Hold an exclusive lock for one read-check-write sequence on the state file."""
+    path = home() / "sessions.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        yield
+
+
 def _parse_timestamp(value: Any, *, session_id: str) -> datetime:
     if not isinstance(value, str):
         raise MobileSkillError(
@@ -142,46 +154,47 @@ def cleanup(
         current_time = current_time.replace(tzinfo=timezone.utc)
     current_time = current_time.astimezone(timezone.utc)
     cutoff = current_time - timedelta(days=days)
-    value = _read()
-    screenshots_root = home() / "screenshots"
-    sessions_to_remove: list[str] = []
-    directories_to_remove: list[Path] = []
+    with _locked():
+        value = _read()
+        screenshots_root = home() / "screenshots"
+        sessions_to_remove: list[str] = []
+        directories_to_remove: list[Path] = []
 
-    for session_id, session in value["sessions"].items():
-        if session.get("state") != "stopped":
-            continue
-        timestamp = _parse_timestamp(
-            session.get("stopped_at") or session.get("created_at"), session_id=session_id
-        )
-        if timestamp > cutoff:
-            continue
-        if Path(session_id).name != session_id or session_id in {"", ".", ".."}:
-            raise MobileSkillError("state_invalid", f"invalid session id: {session_id!r}")
-        sessions_to_remove.append(session_id)
-        session_directory = screenshots_root / session_id
-        if session_directory.exists() or session_directory.is_symlink():
-            directories_to_remove.append(session_directory)
-
-    known_sessions = set(value["sessions"])
-    if screenshots_root.is_dir():
-        for candidate in screenshots_root.iterdir():
-            if candidate.name in known_sessions or not (
-                candidate.is_dir() or candidate.is_symlink()
-            ):
+        for session_id, session in value["sessions"].items():
+            if session.get("state") != "stopped":
                 continue
-            modified_at = datetime.fromtimestamp(candidate.lstat().st_mtime, timezone.utc)
-            if modified_at <= cutoff:
-                directories_to_remove.append(candidate)
+            timestamp = _parse_timestamp(
+                session.get("stopped_at") or session.get("created_at"), session_id=session_id
+            )
+            if timestamp > cutoff:
+                continue
+            if Path(session_id).name != session_id or session_id in {"", ".", ".."}:
+                raise MobileSkillError("state_invalid", f"invalid session id: {session_id!r}")
+            sessions_to_remove.append(session_id)
+            session_directory = screenshots_root / session_id
+            if session_directory.exists() or session_directory.is_symlink():
+                directories_to_remove.append(session_directory)
 
-    unique_directories = list(dict.fromkeys(directories_to_remove))
-    bytes_reclaimable = sum(_directory_size(path) for path in unique_directories)
-    if not dry_run:
-        for directory in unique_directories:
-            _remove_directory(directory)
-        if sessions_to_remove:
-            for session_id in sessions_to_remove:
-                del value["sessions"][session_id]
-            _write(value)
+        known_sessions = set(value["sessions"])
+        if screenshots_root.is_dir():
+            for candidate in screenshots_root.iterdir():
+                if candidate.name in known_sessions or not (
+                    candidate.is_dir() or candidate.is_symlink()
+                ):
+                    continue
+                modified_at = datetime.fromtimestamp(candidate.lstat().st_mtime, timezone.utc)
+                if modified_at <= cutoff:
+                    directories_to_remove.append(candidate)
+
+        unique_directories = list(dict.fromkeys(directories_to_remove))
+        bytes_reclaimable = sum(_directory_size(path) for path in unique_directories)
+        if not dry_run:
+            for directory in unique_directories:
+                _remove_directory(directory)
+            if sessions_to_remove:
+                for session_id in sessions_to_remove:
+                    del value["sessions"][session_id]
+                _write(value)
 
     return {
         "dry_run": dry_run,
@@ -203,29 +216,30 @@ def _require_session(value: dict[str, Any], session_id: str) -> dict[str, Any]:
 def create_session(
     device_id: str, platform: str = "android", backend: str = "adb"
 ) -> dict[str, Any]:
-    value = _read()
-    for session in value["sessions"].values():
-        if session["device_id"] == device_id and session["state"] in {"active", "paused"}:
-            raise MobileSkillError(
-                "device_busy",
-                f"device {device_id} is already leased by session {session['id']}",
-                f"stop session {session['id']} before starting another one",
-            )
-    session_id = uuid4().hex[:4]
-    while session_id in value["sessions"]:
+    with _locked():
+        value = _read()
+        for session in value["sessions"].values():
+            if session["device_id"] == device_id and session["state"] in {"active", "paused"}:
+                raise MobileSkillError(
+                    "device_busy",
+                    f"device {device_id} is already leased by session {session['id']}",
+                    f"stop session {session['id']} before starting another one",
+                )
         session_id = uuid4().hex[:4]
-    session = {
-        "id": session_id,
-        "device_id": device_id,
-        "platform": platform,
-        "backend": backend,
-        "state": "active",
-        "created_at": _now(),
-        "last_observation": None,
-    }
-    value["sessions"][session_id] = session
-    _write(value)
-    return session
+        while session_id in value["sessions"]:
+            session_id = uuid4().hex[:4]
+        session = {
+            "id": session_id,
+            "device_id": device_id,
+            "platform": platform,
+            "backend": backend,
+            "state": "active",
+            "created_at": _now(),
+            "last_observation": None,
+        }
+        value["sessions"][session_id] = session
+        _write(value)
+        return session
 
 
 def get_session(session_id: str) -> dict[str, Any]:
@@ -236,7 +250,7 @@ def list_sessions() -> list[dict[str, Any]]:
     return list(_read()["sessions"].values())
 
 
-def update_session(session_id: str, **changes: Any) -> dict[str, Any]:
+def _mutate(session_id: str, **changes: Any) -> dict[str, Any]:
     value = _read()
     session = _require_session(value, session_id)
     session.update(changes)
@@ -244,59 +258,65 @@ def update_session(session_id: str, **changes: Any) -> dict[str, Any]:
     return session
 
 
+def update_session(session_id: str, **changes: Any) -> dict[str, Any]:
+    with _locked():
+        return _mutate(session_id, **changes)
+
+
 def stop_session(session_id: str) -> dict[str, Any]:
-    value = _read()
-    session = _require_session(value, session_id)
-    session["state"] = "stopped"
-    session["stopped_at"] = _now()
-    _write(value)
-    return session
+    with _locked():
+        return _mutate(session_id, state="stopped", stopped_at=_now())
 
 
 def pause_session(session_id: str) -> dict[str, Any]:
-    session = get_session(session_id)
-    if session["state"] != "active":
-        raise MobileSkillError(
-            "invalid_session_state", f"cannot pause session {session_id}: it is {session['state']}"
-        )
-    return update_session(session_id, state="paused")
+    with _locked():
+        session = _require_session(_read(), session_id)
+        if session["state"] != "active":
+            raise MobileSkillError(
+                "invalid_session_state",
+                f"cannot pause session {session_id}: it is {session['state']}",
+            )
+        return _mutate(session_id, state="paused")
 
 
 def request_help(session_id: str, reason: str, message: str) -> dict[str, Any]:
-    session = get_session(session_id)
-    if session["state"] != "active":
-        raise MobileSkillError(
-            "invalid_session_state",
-            f"cannot request help for session {session_id}: it is {session['state']}",
+    with _locked():
+        session = _require_session(_read(), session_id)
+        if session["state"] != "active":
+            raise MobileSkillError(
+                "invalid_session_state",
+                f"cannot request help for session {session_id}: it is {session['state']}",
+            )
+        help_request = {
+            "id": f"help-{uuid4().hex[:8]}",
+            "reason": reason,
+            "message": message,
+            "status": "waiting_for_user",
+            "created_at": _now(),
+        }
+        return _mutate(
+            session_id,
+            state="paused",
+            pause_reason="user_intervention",
+            help_request=help_request,
+            last_observation=None,
         )
-    help_request = {
-        "id": f"help-{uuid4().hex[:8]}",
-        "reason": reason,
-        "message": message,
-        "status": "waiting_for_user",
-        "created_at": _now(),
-    }
-    return update_session(
-        session_id,
-        state="paused",
-        pause_reason="user_intervention",
-        help_request=help_request,
-        last_observation=None,
-    )
 
 
 def resume_session(session_id: str) -> dict[str, Any]:
-    session = get_session(session_id)
-    if session["state"] != "paused":
-        raise MobileSkillError(
-            "invalid_session_state", f"cannot resume session {session_id}: it is {session['state']}"
-        )
-    changes: dict[str, Any] = {"state": "active", "last_observation": None}
-    help_request = session.get("help_request")
-    if help_request and help_request.get("status") == "waiting_for_user":
-        resolved = dict(help_request)
-        resolved["status"] = "resolved"
-        resolved["resolved_at"] = _now()
-        changes["help_request"] = resolved
-    changes["pause_reason"] = None
-    return update_session(session_id, **changes)
+    with _locked():
+        session = _require_session(_read(), session_id)
+        if session["state"] != "paused":
+            raise MobileSkillError(
+                "invalid_session_state",
+                f"cannot resume session {session_id}: it is {session['state']}",
+            )
+        changes: dict[str, Any] = {"state": "active", "last_observation": None}
+        help_request = session.get("help_request")
+        if help_request and help_request.get("status") == "waiting_for_user":
+            resolved = dict(help_request)
+            resolved["status"] = "resolved"
+            resolved["resolved_at"] = _now()
+            changes["help_request"] = resolved
+        changes["pause_reason"] = None
+        return _mutate(session_id, **changes)
