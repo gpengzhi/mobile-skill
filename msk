@@ -9,4 +9,10 @@ while [ -h "$SOURCE" ]; do
     esac
 done
 DIR="$(CDPATH= cd -- "$(dirname -- "$SOURCE")" && pwd)"
-PYTHONPATH="$DIR/src${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m mobile_skill "$@"
+# Prefer the checkout's virtualenv when present, so msk works from any shell.
+if [ -x "$DIR/.venv/bin/python3" ]; then
+    PYTHON="$DIR/.venv/bin/python3"
+else
+    PYTHON="python3"
+fi
+PYTHONPATH="$DIR/src${PYTHONPATH:+:$PYTHONPATH}" exec "$PYTHON" -m mobile_skill "$@"

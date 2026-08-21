@@ -15,30 +15,13 @@ The multimodal model interprets screenshots and verifies outcomes, while `mobile
 
 ## Install
 
-Requirements: Python 3.11+, `adb`, and an unlocked Android device with USB debugging enabled.
+Tell your agent:
 
-```bash
-git clone https://github.com/gpengzhi/mobile-skill.git
-cd mobile-skill
-
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-
-./msk install codex
-./msk --json doctor --agent codex
+```text
+Clone https://github.com/gpengzhi/mobile-skill.git and follow AGENT_INSTALL.md in the repo to install and verify mobile-skill.
 ```
 
-For Claude Code, use:
-
-```bash
-./msk install claude-code
-./msk --json doctor --agent claude-code
-```
-
-Keep the checkout in place after installation because the installer uses symlinks.
-
-If the phone is not detected or shows as unauthorized, run `./msk onboard` and accept the USB debugging dialog on the phone.
+Installing by hand works the same way: [`AGENT_INSTALL.md`](AGENT_INSTALL.md) is a short, self-contained checklist. Requirements: Python 3.11+, `adb`, and an unlocked Android device with USB debugging enabled.
 
 ## Try it
 
