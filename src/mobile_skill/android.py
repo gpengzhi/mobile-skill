@@ -87,6 +87,11 @@ def list_devices() -> list[dict[str, str]]:
     return devices
 
 
+def restart_server() -> None:
+    run_adb("kill-server")
+    run_adb("start-server")
+
+
 def require_device(serial: str | None = None) -> str:
     requested = serial or os.environ.get("ANDROID_SERIAL")
     devices = list_devices()

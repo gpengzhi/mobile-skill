@@ -19,6 +19,14 @@ msk doctor --agent claude-code
 
 Use `msk devices` or `msk session list` only for troubleshooting. Treat `vision=unverified` as normal: static checks cannot prove that the model understands images.
 
+When the device is missing, unauthorized, or offline, tell the user to unlock the phone and watch for the USB debugging dialog, then run:
+
+```bash
+msk --json onboard --timeout 60
+```
+
+It restarts the adb server to re-trigger authorization and waits for the phone to become ready. Rerun `msk doctor` afterwards.
+
 ## Required Loop
 
 ```text

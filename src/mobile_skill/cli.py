@@ -8,7 +8,7 @@ import sys
 import time
 from typing import Any
 
-from . import android, diagnostics, installer, observations, state
+from . import android, diagnostics, installer, observations, onboard, state
 from . import __version__
 from .errors import MobileSkillError
 
@@ -40,6 +40,10 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = commands.add_parser("doctor")
     doctor.add_argument("--agent", choices=("codex", "claude-code"))
     commands.add_parser("devices")
+
+    onboard_command = commands.add_parser("onboard")
+    onboard_command.add_argument("--device")
+    onboard_command.add_argument("--timeout", type=int, default=60, dest="timeout_s")
 
     install = commands.add_parser("install")
     install.add_argument("agent", choices=("codex", "claude-code"))
@@ -396,6 +400,8 @@ def _dispatch(args: argparse.Namespace) -> Any:
         return _ok(**diagnostics.doctor(args.agent))
     if args.command == "devices":
         return _ok(devices=android.list_devices())
+    if args.command == "onboard":
+        return _ok(**onboard.onboard(device=args.device, timeout_s=args.timeout_s))
     if args.command == "install":
         install_agent = (
             installer.install_codex if args.agent == "codex" else installer.install_claude_code

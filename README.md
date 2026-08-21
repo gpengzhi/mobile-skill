@@ -38,6 +38,8 @@ For Claude Code, use:
 
 Keep the checkout in place after installation because the installer uses symlinks.
 
+If the phone is not detected or shows as unauthorized, run `./msk onboard` and accept the USB debugging dialog on the phone.
+
 ## Try it
 
 Open Codex or Claude Code with a multimodal model that can inspect images, then describe the mobile task in natural language.

@@ -96,10 +96,10 @@ def claude_code_checks() -> dict[str, Any]:
     return _agent_checks("claude-code")
 
 
-def doctor(agent: str | None = None) -> dict[str, Any]:
+def doctor(agent: str | None = None, serial: str | None = None) -> dict[str, Any]:
     devices = android.list_devices()
     ready = [device for device in devices if device["state"] == "device"]
-    requested = os.environ.get("ANDROID_SERIAL")
+    requested = serial or os.environ.get("ANDROID_SERIAL")
     if requested:
         selected = next((device for device in ready if device["serial"] == requested), None)
     else:
