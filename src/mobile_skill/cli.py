@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from typing import Any
@@ -32,6 +33,37 @@ DEFAULT_SETTLE_MS = {
 }
 MAX_SETTLE_MS = 60_000
 NORMALIZED_COORDINATE_MAX = observations.NORMALIZED_COORDINATE_MAX
+UNLOCK_TTL_S_DEFAULT = 30.0
+
+
+def _unlock_ttl_s() -> float:
+    configured = os.environ.get("MOBILE_SKILL_UNLOCK_TTL_S")
+    if configured is None:
+        return UNLOCK_TTL_S_DEFAULT
+    try:
+        value = float(configured)
+    except ValueError as error:
+        raise MobileSkillError(
+            "invalid_unlock_ttl",
+            "MOBILE_SKILL_UNLOCK_TTL_S must be a non-negative number",
+        ) from error
+    if value < 0:
+        raise MobileSkillError(
+            "invalid_unlock_ttl",
+            "MOBILE_SKILL_UNLOCK_TTL_S must be a non-negative number",
+        )
+    return value
+
+
+def _ensure_unlocked_cached(session: dict[str, Any], serial: str) -> None:
+    verified_at = session.get("unlock_verified_at")
+    ttl = _unlock_ttl_s()
+    now = time.time()
+    if verified_at is not None and now - verified_at < ttl:
+        return
+    android.ensure_unlocked(serial)
+    state.update_session(session["id"], unlock_verified_at=now)
+    session["unlock_verified_at"] = now
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -48,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     onboard_command = commands.add_parser("onboard")
     onboard_command.add_argument("--device")
     onboard_command.add_argument("--timeout", type=int, default=60, dest="timeout_s")
+    onboard_command.add_argument("--retries", type=int, default=1)
 
     install = commands.add_parser("install")
     install.add_argument("agent", choices=("codex", "claude-code"))
@@ -128,6 +161,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_session_option(open_app)
     _add_post_action_options(open_app)
 
+    apps = commands.add_parser("apps")
+    apps_commands = apps.add_subparsers(dest="apps_command", required=True)
+    list_apps = apps_commands.add_parser("list")
+    list_apps.add_argument("--user-visible", action="store_true", dest="user_visible")
+    list_apps.add_argument("--device")
+
     return parser
 
 
@@ -192,19 +231,31 @@ def _active_session(args: argparse.Namespace) -> dict[str, Any]:
     return session
 
 
-def _driver(args: argparse.Namespace) -> tuple[dict[str, Any], str]:
+def _driver(
+    args: argparse.Namespace, *, require_unlocked: bool = True
+) -> tuple[dict[str, Any], str]:
     session = _active_session(args)
     serial = android.require_device(session["device_id"])
+    if require_unlocked:
+        _ensure_unlocked_cached(session, serial)
+    state.update_session(session["id"], last_activity_at=time.time())
     return session, serial
 
 
 def _check_observation(session: dict[str, Any], observation_id: str) -> dict[str, Any]:
     current = session.get("last_observation")
     if current is None or current["id"] != observation_id:
+        details: dict[str, Any] = {"observation_id": observation_id}
+        if current is not None:
+            details["current_observation_id"] = current["id"]
+            hint = f"the current observation is {current['id']}; use it or run `msk observe --session {session['id']}` for a fresh one"
+        else:
+            hint = f"run `msk observe --session {session['id']}`"
         raise MobileSkillError(
             "stale_observation",
             f"observation {observation_id} is not current",
-            f"run `msk observe --session {session['id']}`",
+            hint,
+            details,
         )
     return current
 
@@ -246,18 +297,17 @@ def _wait_for_settle(request: tuple[int, str]) -> dict[str, Any]:
 
 
 def _complete_action(
-    args: argparse.Namespace,
     session: dict[str, Any],
     serial: str,
     action: dict[str, Any],
     *,
+    request: tuple[int, str] | None,
     observation_id: str | None = None,
 ) -> dict[str, Any]:
     result = _ok(session_id=session["id"], device_id=serial, **action)
     if observation_id is not None:
         result["observation_id"] = observation_id
 
-    request = _settle_request(args)
     _invalidate_observation(session["id"])
     if request is None:
         return result
@@ -321,7 +371,7 @@ def _device_point(observation: dict[str, Any], x: int, y: int) -> tuple[int, int
 
 
 def _run_action(args: argparse.Namespace) -> dict[str, Any]:
-    _settle_request(args)
+    request = _settle_request(args)
     session, serial = _driver(args)
     observation = _check_observation(session, args.observation)
     size = _device_size(observation)
@@ -360,17 +410,17 @@ def _run_action(args: argparse.Namespace) -> dict[str, Any]:
             "duration_ms": args.duration_ms,
         }
     return _complete_action(
-        args,
         session,
         serial,
         action,
+        request=request,
         observation_id=args.observation,
     )
 
 
 def _simple_action(args: argparse.Namespace) -> dict[str, Any]:
-    _settle_request(args)
-    session, serial = _driver(args)
+    request = _settle_request(args)
+    session, serial = _driver(args, require_unlocked=args.command != "wait")
     if args.command == "wait":
         android.wait(args.duration_ms)
         action = {"action": "wait", "duration_ms": args.duration_ms}
@@ -394,7 +444,7 @@ def _simple_action(args: argparse.Namespace) -> dict[str, Any]:
         action = {"action": "app-open", "package": package}
     else:
         raise MobileSkillError("unknown_command", f"unknown action: {args.command}")
-    return _complete_action(args, session, serial, action)
+    return _complete_action(session, serial, action, request=request)
 
 
 def _dispatch(args: argparse.Namespace) -> Any:
@@ -405,7 +455,11 @@ def _dispatch(args: argparse.Namespace) -> Any:
     if args.command == "devices":
         return _ok(devices=android.list_devices())
     if args.command == "onboard":
-        return _ok(**onboard.onboard(device=args.device, timeout_s=args.timeout_s))
+        return _ok(
+            **onboard.onboard(
+                device=args.device, timeout_s=args.timeout_s, retries=args.retries
+            )
+        )
     if args.command == "install":
         install_agent = (
             installer.install_codex if args.agent == "codex" else installer.install_claude_code
@@ -435,6 +489,14 @@ def _dispatch(args: argparse.Namespace) -> Any:
             return _ok(session=state.pause_session(args.session_id))
         if args.session_command == "resume":
             return _ok(session=state.resume_session(args.session_id))
+    if args.command == "apps":
+        if args.apps_command == "list":
+            serial = android.require_device(args.device)
+            return _ok(
+                device_id=serial,
+                user_visible=args.user_visible,
+                apps=android.list_packages(serial, user_visible=args.user_visible),
+            )
     if args.command == "observe":
         return _observe(args)
     if args.command in ("tap", "double-tap", "long-press", "swipe"):

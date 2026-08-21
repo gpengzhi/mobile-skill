@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 from uuid import uuid4
@@ -31,12 +32,11 @@ def capture(
     serial = serial or android.require_device(session["device_id"])
     observation_id = f"obs-{uuid4().hex[:8]}"
     directory = state.screenshots_dir(session_id)
-    raw_path = directory / f"{observation_id}.png"
-    _, (device_width, device_height) = android.capture(serial, raw_path)
+    keep_raw = full or os.environ.get("MOBILE_SKILL_KEEP_RAW") == "1"
+    raw_path = directory / f"{observation_id}.png" if keep_raw else None
+    image_bytes, (device_width, device_height) = android.capture(serial, raw_path)
     model_path = directory / f"{observation_id}.jpg"
-    android.compress_for_model(
-        raw_path, model_path, target_width=model_width
-    )
+    android.compress_for_model(image_bytes, model_path, target_width=model_width)
 
     path = raw_path if full else model_path
     observation: dict[str, Any] = {
@@ -44,7 +44,7 @@ def capture(
         "path": str(path),
         "width": device_width,
         "height": device_height,
-        "raw_path": str(raw_path),
+        "raw_path": str(raw_path) if raw_path is not None else None,
         "model_path": str(model_path),
         "coordinate_scale": NORMALIZED_COORDINATE_MAX,
         "full": full,
@@ -52,7 +52,9 @@ def capture(
         "coordinate_space": "normalized_0_999",
         "created_at": time.time(),
     }
-    state.update_session(session_id, last_observation=observation)
+    state.update_session(
+        session_id, last_observation=observation, last_activity_at=time.time()
+    )
     return {
         "ok": True,
         "type": "observation",

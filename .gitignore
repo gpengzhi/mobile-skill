@@ -1,6 +1,3 @@
 __pycache__/
 *.py[cod]
 .venv/
-
-# local planning notes, not for publish
-docs/optimization-plan.md

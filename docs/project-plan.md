@@ -4,23 +4,23 @@
 
 Provide reliable screenshot-driven Android GUI navigation for local coding Agents.
 
-## Current Scope
+## Supported today
 
-Supported:
-
-- USB ADB device discovery and validation
+- USB ADB device discovery, validation, and first-run onboarding (`msk onboard`)
 - Screenshot capture, JPEG compression, and normalized `0..999` coordinate mapping
-- Tap, double-tap, long-press, swipe, wait, text input, key presses, and App launch
-- Session lease, stale observation protection, pause/resume, and human takeover
+- Tap, double-tap, long-press, swipe, wait, text input, key presses, app launch
+- Installed-app inventory (`msk apps list`) as a text-based fallback when a package name is unknown
+- Session lease with observation-staleness protection, pause/resume, human takeover, and idle-timeout cleanup
 - Codex and Claude Code Skill installation from a source checkout
-- Automatic cleanup of stopped Sessions and screenshots
+- Automatic cleanup of stopped/idle sessions and orphaned screenshots
 
-Not supported:
+## Not supported
 
-- iPhone
+- iPhone (deferred until the Android side is proven)
+- Wi-Fi ADB, multi-device selection
 - Deep Links
-- OCR, UI trees, accessibility trees, or element selectors
-- Daemon mode, remote devices, or multi-Agent scheduling
+- OCR, UI trees, accessibility trees, element selectors
+- Daemon mode, remote devices, multi-Agent scheduling
 - Automatic handling of login, secrets, permissions, or payments
 
 ## Invariants
@@ -39,16 +39,17 @@ Codex / Claude Code
         ↓
       msk CLI
         ↓
-Session + observation state
+Session + observation state (~/.local/state/mobile-skill/)
         ↓
       Android ADB
         ↓
    Real Android phone
 ```
 
-## Next Priorities
+## Next priorities
 
-1. Test more Android vendors, versions, screen sizes, and orientations.
-2. Improve recovery from keyboard, loading, dialog, and navigation failures.
-3. Establish repeatable Claude Code visual navigation checks.
-4. Add a lightweight device lock only when real concurrency requires it.
+1. **Automated test suite.** Pure-function tests for coordinate mapping, IME dispatch, cleanup, and observation staleness — locks the harness contract so every change no longer requires a real-device run.
+2. **Evaluation matrix.** ~20 representative tasks × 2–3 frontier models × configurations (476px vision, 768px vision, accessibility-tree channel where applicable). The data decides whether a structured-sensing fallback belongs in the primary path, and whether a text-only mode is viable enough to broaden model support.
+3. **Raise the model image width from 476 to 768** and expose it as configuration once the eval baseline exists.
+4. **Bounded composite actions** (`scroll-until` with a swipe cap) once the eval identifies where composite steps outperform single-atomic-step chains.
+5. **Wi-Fi ADB pairing and multi-device selection.**

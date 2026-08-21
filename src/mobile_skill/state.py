@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ from .errors import MobileSkillError
 
 
 DEFAULT_RETENTION_DAYS = 7
+DEFAULT_IDLE_SESSION_TTL_S = 1800
 
 
 def home() -> Path:
@@ -54,6 +56,32 @@ def retention_days() -> int:
             "MOBILE_SKILL_RETENTION_DAYS must be a non-negative integer",
         )
     return value
+
+
+def idle_session_ttl_s() -> int:
+    configured = os.environ.get("MOBILE_SKILL_IDLE_SESSION_TTL_S")
+    if configured is None:
+        return DEFAULT_IDLE_SESSION_TTL_S
+    try:
+        value = int(configured)
+    except ValueError as error:
+        raise MobileSkillError(
+            "invalid_idle_session_ttl",
+            "MOBILE_SKILL_IDLE_SESSION_TTL_S must be a non-negative integer",
+        ) from error
+    if value < 0:
+        raise MobileSkillError(
+            "invalid_idle_session_ttl",
+            "MOBILE_SKILL_IDLE_SESSION_TTL_S must be a non-negative integer",
+        )
+    return value
+
+
+def _activity_timestamp(session: dict[str, Any], session_id: str) -> datetime:
+    last_activity = session.get("last_activity_at")
+    if isinstance(last_activity, (int, float)):
+        return datetime.fromtimestamp(last_activity, timezone.utc)
+    return _parse_timestamp(session.get("created_at"), session_id=session_id)
 
 
 def _read() -> dict[str, Any]:
@@ -96,7 +124,7 @@ def _locked():
     """Hold an exclusive lock for one read-check-write sequence on the state file."""
     path = home() / "sessions.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as handle:
+    with path.open("a") as handle:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         yield
 
@@ -154,11 +182,26 @@ def cleanup(
         current_time = current_time.replace(tzinfo=timezone.utc)
     current_time = current_time.astimezone(timezone.utc)
     cutoff = current_time - timedelta(days=days)
+    idle_cutoff = current_time - timedelta(seconds=idle_session_ttl_s())
     with _locked():
         value = _read()
         screenshots_root = home() / "screenshots"
         sessions_to_remove: list[str] = []
+        sessions_idle_stopped: list[str] = []
         directories_to_remove: list[Path] = []
+
+        state_changed = False
+        for session_id, session in value["sessions"].items():
+            if session.get("state") not in {"active", "paused"}:
+                continue
+            if _activity_timestamp(session, session_id) > idle_cutoff:
+                continue
+            if not dry_run:
+                session["state"] = "stopped"
+                session["stopped_at"] = _now()
+                session["stop_reason"] = "idle_timeout"
+                state_changed = True
+            sessions_idle_stopped.append(session_id)
 
         for session_id, session in value["sessions"].items():
             if session.get("state") != "stopped":
@@ -194,12 +237,16 @@ def cleanup(
             if sessions_to_remove:
                 for session_id in sessions_to_remove:
                     del value["sessions"][session_id]
+                state_changed = True
+            if state_changed:
                 _write(value)
 
     return {
         "dry_run": dry_run,
         "retention_days": days,
+        "idle_session_ttl_s": idle_session_ttl_s(),
         "cutoff": cutoff.isoformat(timespec="seconds"),
+        "sessions_idle_stopped": sessions_idle_stopped,
         "sessions_pruned": sessions_to_remove,
         "screenshot_directories_pruned": [str(path) for path in unique_directories],
         "bytes_reclaimable": bytes_reclaimable,
@@ -225,9 +272,9 @@ def create_session(
                     f"device {device_id} is already leased by session {session['id']}",
                     f"stop session {session['id']} before starting another one",
                 )
-        session_id = uuid4().hex[:4]
+        session_id = uuid4().hex[:6]
         while session_id in value["sessions"]:
-            session_id = uuid4().hex[:4]
+            session_id = uuid4().hex[:6]
         session = {
             "id": session_id,
             "device_id": device_id,
@@ -235,6 +282,7 @@ def create_session(
             "backend": backend,
             "state": "active",
             "created_at": _now(),
+            "last_activity_at": time.time(),
             "last_observation": None,
         }
         value["sessions"][session_id] = session
@@ -270,53 +318,58 @@ def stop_session(session_id: str) -> dict[str, Any]:
 
 def pause_session(session_id: str) -> dict[str, Any]:
     with _locked():
-        session = _require_session(_read(), session_id)
+        value = _read()
+        session = _require_session(value, session_id)
         if session["state"] != "active":
             raise MobileSkillError(
                 "invalid_session_state",
                 f"cannot pause session {session_id}: it is {session['state']}",
             )
-        return _mutate(session_id, state="paused")
+        session["state"] = "paused"
+        _write(value)
+        return session
 
 
 def request_help(session_id: str, reason: str, message: str) -> dict[str, Any]:
     with _locked():
-        session = _require_session(_read(), session_id)
+        value = _read()
+        session = _require_session(value, session_id)
         if session["state"] != "active":
             raise MobileSkillError(
                 "invalid_session_state",
                 f"cannot request help for session {session_id}: it is {session['state']}",
             )
-        help_request = {
+        session["state"] = "paused"
+        session["pause_reason"] = "user_intervention"
+        session["help_request"] = {
             "id": f"help-{uuid4().hex[:8]}",
             "reason": reason,
             "message": message,
             "status": "waiting_for_user",
             "created_at": _now(),
         }
-        return _mutate(
-            session_id,
-            state="paused",
-            pause_reason="user_intervention",
-            help_request=help_request,
-            last_observation=None,
-        )
+        session["last_observation"] = None
+        session["unlock_verified_at"] = None
+        _write(value)
+        return session
 
 
 def resume_session(session_id: str) -> dict[str, Any]:
     with _locked():
-        session = _require_session(_read(), session_id)
+        value = _read()
+        session = _require_session(value, session_id)
         if session["state"] != "paused":
             raise MobileSkillError(
                 "invalid_session_state",
                 f"cannot resume session {session_id}: it is {session['state']}",
             )
-        changes: dict[str, Any] = {"state": "active", "last_observation": None}
+        session["state"] = "active"
+        session["last_observation"] = None
+        session["unlock_verified_at"] = None
+        session["pause_reason"] = None
         help_request = session.get("help_request")
         if help_request and help_request.get("status") == "waiting_for_user":
-            resolved = dict(help_request)
-            resolved["status"] = "resolved"
-            resolved["resolved_at"] = _now()
-            changes["help_request"] = resolved
-        changes["pause_reason"] = None
-        return _mutate(session_id, **changes)
+            help_request["status"] = "resolved"
+            help_request["resolved_at"] = _now()
+        _write(value)
+        return session

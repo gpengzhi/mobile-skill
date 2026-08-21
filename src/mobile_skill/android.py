@@ -9,6 +9,7 @@ import struct
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 from .errors import MobileSkillError
 
@@ -16,8 +17,14 @@ from .errors import MobileSkillError
 class AndroidError(MobileSkillError):
     """An actionable Android/ADB error."""
 
-    def __init__(self, message: str, code: str = "android_error", hint: str | None = None):
-        super().__init__(code, message, hint)
+    def __init__(
+        self,
+        message: str,
+        code: str = "android_error",
+        hint: str | None = None,
+        details: dict[str, Any] | None = None,
+    ):
+        super().__init__(code, message, hint, details)
 
 
 KEYS = {
@@ -37,6 +44,10 @@ KEYS = {
 
 ADB_KEYBOARD_IME = "com.github.uiautomator/.AdbKeyboard"
 ADB_KEYBOARD_INPUT_ACTION = "ADB_KEYBOARD_INPUT_TEXT"
+# Empirically-derived delays; err on the side of the original keyboard being
+# fully hidden and ADBKeyboard fully bound before broadcasting text.
+ADB_KEYBOARD_PRE_SWITCH_DELAY_S = 0.25
+ADB_KEYBOARD_POST_SWITCH_DELAY_S = 0.35
 
 
 def adb_path() -> str:
@@ -105,14 +116,21 @@ def require_device(serial: str | None = None) -> str:
                 f"Android device is unauthorized: {requested}",
                 "device_unauthorized",
                 "authorize USB debugging on the phone, then retry",
+                {"serial": requested},
             )
         if device is not None and device["state"] == "offline":
             raise AndroidError(
                 f"Android device is offline: {requested}",
                 "device_offline",
                 "reconnect the phone or restart ADB, then retry",
+                {"serial": requested},
             )
-        raise AndroidError(f"Android device is not ready: {requested}", "device_disconnected")
+        raise AndroidError(
+            f"Android device is not ready: {requested}",
+            "device_disconnected",
+            None,
+            {"serial": requested, "devices": devices},
+        )
     if len(ready) == 1:
         return ready[0]["serial"]
     if not ready:
@@ -121,22 +139,28 @@ def require_device(serial: str | None = None) -> str:
                 f"Android device is unauthorized: {devices[0]['serial']}",
                 "device_unauthorized",
                 "authorize USB debugging on the phone, then retry",
+                {"serial": devices[0]["serial"]},
             )
         if len(devices) == 1 and devices[0]["state"] == "offline":
             raise AndroidError(
                 f"Android device is offline: {devices[0]['serial']}",
                 "device_offline",
                 "reconnect the phone or restart ADB, then retry",
+                {"serial": devices[0]["serial"]},
             )
         states = ", ".join(f"{d['serial']}={d['state']}" for d in devices) or "none"
         raise AndroidError(
             f"no ready Android device; adb sees: {states}",
             "device_not_found",
             "connect and authorize an Android phone, then retry",
+            {"devices": devices},
         )
     serials = ", ".join(device["serial"] for device in ready)
     raise AndroidError(
-        f"multiple Android devices are ready; pass --device: {serials}", "device_ambiguous"
+        f"multiple Android devices are ready; pass --device: {serials}",
+        "device_ambiguous",
+        None,
+        {"serials": [d["serial"] for d in ready]},
     )
 
 
@@ -198,16 +222,19 @@ def png_size(image: bytes) -> tuple[int, int]:
     return struct.unpack(">II", image[16:24])
 
 
-def capture(serial: str, output_path: Path) -> tuple[Path, tuple[int, int]]:
+def capture(
+    serial: str, output_path: Path | None = None
+) -> tuple[bytes, tuple[int, int]]:
     image = run_adb("exec-out", "screencap", "-p", serial=serial, binary=True)
     size = png_size(image)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(image)
-    return output_path, size
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(image)
+    return image, size
 
 
 def compress_for_model(
-    input_path: Path,
+    source: Path | bytes,
     output_path: Path,
     target_width: int = 476,
     quality: int = 85,
@@ -223,12 +250,19 @@ def compress_for_model(
             "Pillow is not installed", "pillow_not_found", "pip install Pillow"
         ) from error
 
-    with Image.open(input_path) as source:
-        width, height = source.size
+    if isinstance(source, bytes):
+        from io import BytesIO
+
+        opener = BytesIO(source)
+    else:
+        opener = source
+
+    with Image.open(opener) as image_obj:
+        width, height = image_obj.size
         target_width = min(target_width, width)
         target_height = max(1, round(height * target_width / width))
         target_size = (target_width, target_height)
-        image = source.convert("RGB").resize(target_size, Image.Resampling.LANCZOS)
+        image = image_obj.convert("RGB").resize(target_size, Image.Resampling.LANCZOS)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(output_path, format="JPEG", quality=quality, optimize=True)
     return output_path, target_size
@@ -248,7 +282,6 @@ def validate_point(x: int, y: int, width: int, height: int) -> None:
 
 
 def tap(serial: str, x: int, y: int, size: tuple[int, int]) -> None:
-    ensure_unlocked(serial)
     validate_point(x, y, *size)
     run_adb("shell", "input", "tap", str(x), str(y), serial=serial)
 
@@ -256,7 +289,6 @@ def tap(serial: str, x: int, y: int, size: tuple[int, int]) -> None:
 def double_tap(
     serial: str, x: int, y: int, interval_ms: int, size: tuple[int, int]
 ) -> None:
-    ensure_unlocked(serial)
     validate_point(x, y, *size)
     if interval_ms <= 0:
         raise AndroidError("interval must be positive")
@@ -266,7 +298,6 @@ def double_tap(
 
 
 def long_press(serial: str, x: int, y: int, duration_ms: int, size: tuple[int, int]) -> None:
-    ensure_unlocked(serial)
     validate_point(x, y, *size)
     if duration_ms <= 0:
         raise AndroidError("duration must be positive")
@@ -284,7 +315,6 @@ def swipe(
     duration_ms: int,
     size: tuple[int, int],
 ) -> None:
-    ensure_unlocked(serial)
     validate_point(x1, y1, *size)
     validate_point(x2, y2, *size)
     if duration_ms <= 0:
@@ -325,11 +355,11 @@ def _type_unicode_with_adb_keyboard(serial: str, text: str) -> str:
     ).strip()
     was_enabled = ADB_KEYBOARD_IME in enabled_imes
     try:
-        time.sleep(0.25)
+        time.sleep(ADB_KEYBOARD_PRE_SWITCH_DELAY_S)
         if not was_enabled:
             run_adb("shell", "ime", "enable", ADB_KEYBOARD_IME, serial=serial)
         run_adb("shell", "ime", "set", ADB_KEYBOARD_IME, serial=serial)
-        time.sleep(0.35)
+        time.sleep(ADB_KEYBOARD_POST_SWITCH_DELAY_S)
         encoded = base64.b64encode(text.encode("utf-8")).decode("ascii").rstrip("=")
         output = str(
             run_adb(
@@ -359,12 +389,38 @@ def _type_unicode_with_adb_keyboard(serial: str, text: str) -> str:
 
 
 def type_text(serial: str, text: str) -> str:
-    ensure_unlocked(serial)
-    if any(ord(character) > 127 for character in text):
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    if "\n" not in normalized:
+        return _type_segment(serial, normalized)
+    segments = normalized.split("\n")
+    methods: list[str] = []
+    for index, segment in enumerate(segments):
+        if index > 0:
+            press(serial, "enter")
+        if segment:
+            method = _type_segment(serial, segment)
+            if method not in methods:
+                methods.append(method)
+    methods.append("enter")
+    return "+".join(methods)
+
+
+def _type_segment(serial: str, text: str) -> str:
+    if _needs_ime(text):
         return _type_unicode_with_adb_keyboard(serial, text)
     encoded = _shell_quote(text.replace(" ", "%s"))
     run_adb("shell", "input", "text", encoded, serial=serial)
     return "adb-input-text"
+
+
+def _needs_ime(text: str) -> bool:
+    if "%s" in text:
+        return True
+    for character in text:
+        code = ord(character)
+        if code > 127 or code < 32 or code == 127:
+            return True
+    return False
 
 
 def input_capabilities(serial: str) -> dict[str, object]:
@@ -392,7 +448,6 @@ def input_capabilities(serial: str) -> dict[str, object]:
 
 
 def press(serial: str, key: str) -> None:
-    ensure_unlocked(serial)
     normalized = key.lower()
     code = KEYS.get(normalized)
     if code is None and len(normalized) == 1 and normalized.isalnum():
@@ -416,7 +471,83 @@ def app_switcher(serial: str) -> None:
 
 
 def launch_app(serial: str, package: str) -> str:
-    ensure_unlocked(serial)
     require_installed_app(serial, package)
-    run_adb("shell", "monkey", "-p", _shell_quote(package), "1", serial=serial)
+    component = _resolve_launcher_component(serial, package)
+    run_adb("shell", "am", "start", "-n", _shell_quote(component), serial=serial)
     return package
+
+
+def list_packages(serial: str, *, user_visible: bool = False) -> list[str]:
+    if user_visible:
+        output = str(
+            run_adb(
+                "shell",
+                "cmd",
+                "package",
+                "query-activities",
+                "--brief",
+                "-a",
+                "android.intent.action.MAIN",
+                "-c",
+                "android.intent.category.LAUNCHER",
+                serial=serial,
+            )
+        )
+        packages: set[str] = set()
+        for line in output.splitlines():
+            candidate = line.strip()
+            if "/" in candidate and " " not in candidate:
+                packages.add(candidate.split("/", 1)[0])
+        return sorted(packages)
+    output = str(run_adb("shell", "pm", "list", "packages", "-e", serial=serial))
+    packages_list: list[str] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("package:"):
+            packages_list.append(stripped.removeprefix("package:").strip())
+    return sorted(set(packages_list))
+
+
+_LAUNCHER_INTENT_ARGS = (
+    "-a",
+    "android.intent.action.MAIN",
+    "-c",
+    "android.intent.category.LAUNCHER",
+)
+
+
+def _find_launcher_line(output: str, prefix: str) -> str | None:
+    for line in output.splitlines():
+        candidate = line.strip()
+        if candidate.startswith(prefix) and " " not in candidate:
+            return candidate
+    return None
+
+
+def _resolve_launcher_component(serial: str, package: str) -> str:
+    prefix = package + "/"
+    attempts: dict[str, str] = {}
+    lookups = (
+        ("resolve", ("cmd", "package", "resolve-activity", "--brief", *_LAUNCHER_INTENT_ARGS, _shell_quote(package))),
+        ("query", ("cmd", "package", "query-activities", "--brief", *_LAUNCHER_INTENT_ARGS)),
+    )
+    for label, arguments in lookups:
+        try:
+            output = str(run_adb("shell", *arguments, serial=serial))
+        except AndroidError:
+            continue
+        attempts[label] = output
+        found = _find_launcher_line(output, prefix)
+        if found is not None:
+            return found
+
+    raise AndroidError(
+        f"cannot resolve launcher activity for {package}",
+        "app_not_launchable",
+        "this app may not declare a MAIN/LAUNCHER activity",
+        {
+            "package": package,
+            "resolve_output": attempts.get("resolve", "").strip()[:500],
+            "query_output": attempts.get("query", "").strip()[:500],
+        },
+    )

@@ -84,9 +84,9 @@ msk --json app open com.android.settings --session <id>
 ```
 
 - Treat `wait` as a fixed delay, not visual-stability detection.
-- Confirm input focus before `type`. For Unicode, first confirm `checks.input.unicode.status=ready`.
+- Confirm input focus before `type`. For Unicode, first confirm `checks.input.unicode.status=ready`. If `type` returns `unicode_input_unavailable` (no supported helper IME installed), do not retry — request user takeover for that text.
 - Use `press` for `enter`, `return`, `space`, `backspace`, `delete`, `tab`, `escape`, `volume-up`, or `volume-down`; prefer the dedicated navigation actions.
-- Pass the exact installed Android package name to `app open`.
+- Pass the exact installed Android package name to `app open`. Do not guess. If the package name is unknown or `app open` returns `app_not_found`, run `msk --json apps list --user-visible` to see the installed launcher apps, or fall back to `msk home` and locate the app visually on the launcher.
 - Observe after every action. Verify uncertain results visually and never retry a side-effecting action blindly.
 - If `post_action_observe_failed` reports `action_applied: true`, run a standalone `observe`; do not repeat the action.
 
@@ -113,7 +113,7 @@ msk --json cleanup --dry-run
 msk --json cleanup
 ```
 
-Use `--older-than-days` for a one-off retention override or set `MOBILE_SKILL_RETENTION_DAYS` for automatic cleanup. Cleanup never removes active or paused Sessions.
+Use `--older-than-days` for a one-off retention override or set `MOBILE_SKILL_RETENTION_DAYS` for automatic cleanup. Cleanup also auto-stops active or paused Sessions that have been idle beyond `MOBILE_SKILL_IDLE_SESSION_TTL_S` (default 30 minutes) with `stop_reason: idle_timeout`, then prunes them like any other stopped Session.
 
 ## Safety
 
