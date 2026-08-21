@@ -13,18 +13,22 @@ from . import __version__
 from .errors import MobileSkillError
 
 
+# Post-action settling delays, deliberately conservative: measured settle
+# times on a real device run well past snappy-looking values (a swipe that
+# opens a page settles at 635-1035ms, a tap that opens a subpage at ~674ms),
+# and a mid-animation capture leads to taps on moved targets.
 DEFAULT_SETTLE_MS = {
-    "tap": 300,
-    "double-tap": 300,
-    "long-press": 300,
-    "swipe": 400,
+    "tap": 800,
+    "double-tap": 800,
+    "long-press": 800,
+    "swipe": 1200,
     "wait": 0,
-    "type": 150,
-    "press": 600,
-    "home": 600,
-    "back": 600,
-    "app-switcher": 600,
-    "app": 1000,
+    "type": 400,
+    "press": 900,
+    "home": 900,
+    "back": 900,
+    "app-switcher": 900,
+    "app": 1500,
 }
 MAX_SETTLE_MS = 60_000
 NORMALIZED_COORDINATE_MAX = observations.NORMALIZED_COORDINATE_MAX

@@ -65,6 +65,8 @@ msk --json swipe X1 Y1 X2 Y2 --duration 350 --session <id> --observation <obs-id
 
 Add `--observe-after` to wait for the action-specific default settling delay and return `next_observation` in the same response. Use `--settle-ms 0..60000` only when the default is unsuitable. Always open the returned `next_observation.path` before choosing another coordinate.
 
+You are the stability check: if the returned image looks transitional — mid-animation, a list still gliding, a page only partially drawn, a keyboard sliding in — run `wait` and observe again before acting. Decelerating flings can look almost still in a single frame, so when in doubt after a `swipe`, wait and re-observe.
+
 - Tap near the center of a visible target.
 - Use `double-tap` only when the interface requires that gesture.
 - Move `swipe` from `(X1, Y1)` to `(X2, Y2)`. To browse downward, swipe upward inside a safe scrollable area.
