@@ -68,6 +68,11 @@ def run_adb(*arguments: str, serial: str | None = None, binary: bool = False) ->
     return result.stdout if binary else result.stdout.decode(errors="replace")
 
 
+def _shell_quote(value: str) -> str:
+    """Quote a value for the device shell that interprets `adb shell` commands."""
+    return "'" + value.replace("'", "'\\''") + "'"
+
+
 def list_devices() -> list[dict[str, str]]:
     output = run_adb("devices", "-l")
     devices = []
@@ -135,11 +140,12 @@ def require_device(serial: str | None = None) -> str:
 def require_installed_app(serial: str, app_id: str) -> str:
     if not app_id or any(character.isspace() or ord(character) < 32 for character in app_id):
         raise AndroidError("Android app id is invalid", "invalid_app_id")
+    output = run_adb(
+        "shell", "pm", "list", "packages", _shell_quote(app_id), serial=serial
+    )
     installed = {
         line.removeprefix("package:").strip()
-        for line in str(
-            run_adb("shell", "pm", "list", "packages", app_id, serial=serial)
-        ).splitlines()
+        for line in str(output).splitlines()
         if line.startswith("package:")
     }
     if app_id not in installed:
@@ -345,7 +351,7 @@ def type_text(serial: str, text: str) -> str:
     ensure_unlocked(serial)
     if any(ord(character) > 127 for character in text):
         return _type_unicode_with_adb_keyboard(serial, text)
-    encoded = text.replace(" ", "%s")
+    encoded = _shell_quote(text.replace(" ", "%s"))
     run_adb("shell", "input", "text", encoded, serial=serial)
     return "adb-input-text"
 
@@ -401,5 +407,5 @@ def app_switcher(serial: str) -> None:
 def launch_app(serial: str, package: str) -> str:
     ensure_unlocked(serial)
     require_installed_app(serial, package)
-    run_adb("shell", "monkey", "-p", package, "1", serial=serial)
+    run_adb("shell", "monkey", "-p", _shell_quote(package), "1", serial=serial)
     return package
