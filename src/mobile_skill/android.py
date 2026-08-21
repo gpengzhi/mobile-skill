@@ -181,7 +181,9 @@ def ensure_unlocked(serial: str) -> None:
 
 def screen_size(serial: str) -> tuple[int, int]:
     output = str(run_adb("shell", "wm", "size", serial=serial))
-    match = re.search(r"(?:Override|Physical) size:\s*(\d+)x(\d+)", output)
+    match = re.search(r"Override size:\s*(\d+)x(\d+)", output) or re.search(
+        r"Physical size:\s*(\d+)x(\d+)", output
+    )
     if not match:
         raise AndroidError(f"cannot determine screen size from: {output.strip()}")
     return int(match.group(1)), int(match.group(2))
