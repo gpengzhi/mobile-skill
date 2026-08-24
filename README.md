@@ -31,7 +31,6 @@ Use mobile-skill to open Bilibili, search for Minecraft, sort results by view co
 
 - Vision-capable models only.
 - One phone over USB — no iOS, no Wi-Fi ADB.
-- Cannot log in, enter OTPs, or complete payments.
 - No OCR or accessibility trees — precision is bounded by the model's eyes.
 
 ## More
