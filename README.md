@@ -31,7 +31,13 @@ Use mobile-skill to open Bilibili, search for Minecraft, sort results by view co
 
 ## Deep Links & Learning
 
-Where an app exposes a deep link, `msk app open-url "bilibili://search?keyword=Minecraft"` warps in — one command instead of *open app → tap search → type → submit*. **25 URL templates across 9 apps** ship in [`registry/deeplinks.json`](registry/deeplinks.json).
+One command instead of *open app → tap search → type → submit*:
+
+```bash
+msk --json app open-url "bilibili://search?keyword=Minecraft" --session <id>
+```
+
+**25 URL templates across 9 apps** — Bilibili, Zhihu, Kuaishou, Taobao, Xianyu, Amap, Weibo, Alipay, WeChat — ship in [`registry/deeplinks.json`](registry/deeplinks.json).
 
 For anything else, `msk` learns as it goes. Once a URL lands in the target app, its **structural template** is stored — `bilibili://space/12345678` becomes `bilibili://space/{...}`, never the concrete value. The next session inherits. `msk app registry` returns curated + learned in one merged view with invocation counts.
 
