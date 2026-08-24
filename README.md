@@ -7,7 +7,7 @@
 
 <br>
 
-When an app exposes a deep link, the skill warps straight in — and remembers what worked, so it gets sharper the more you use it. For everything else, the agent sees each screenshot and taps, swipes, types the way a person would.
+When an app exposes a deep link, the skill warps straight in. Every successful URL is added to a registry that future agents inherit. For everything else, the agent sees each screenshot and taps, swipes, types the way a person would.
 
 ## Install
 
