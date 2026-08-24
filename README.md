@@ -7,7 +7,7 @@
 
 <br>
 
-When an app exposes a deep link, the skill warps straight in. Every successful jump becomes a pattern future agents inherit. For everything else, the agent sees each screenshot and taps, swipes, types the way a person would.
+When an app exposes a deep link, the skill invokes it directly, without GUI navigation. Each successful invocation contributes a reusable pattern to a registry that later sessions inherit. Otherwise, the agent observes each screenshot and issues tap, swipe, or type actions.
 
 ## Install
 
