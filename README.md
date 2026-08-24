@@ -39,9 +39,9 @@ msk --json app open-url "bilibili://search?keyword=Minecraft" --session <id>
 
 **25 URL templates across 9 apps** — Bilibili, Zhihu, Kuaishou, Taobao, Xianyu, Amap, Weibo, Alipay, WeChat — ship in [`registry/deeplinks.json`](registry/deeplinks.json).
 
-For anything else, `msk` learns as it goes. Successful URLs are stored as **structural templates** — never concrete values. The next session inherits. `msk app registry` returns curated + learned in one merged view with invocation counts.
+For anything else, `msk` learns as it goes — URLs that work are remembered for later sessions.
 
-URLs with `pay` / `transfer` / `send` / `publish` / `share` in them won't fire unless they match a curated entry exactly.
+Sensitive actions — spending money, sending messages, posting content — never warp. They stay in the visible tap-by-tap flow.
 
 ## Limits
 
