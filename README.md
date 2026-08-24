@@ -29,7 +29,7 @@ Describe the goal in plain language.
 Use mobile-skill to open Bilibili, search for Minecraft, sort results by view count, and filter to the past week. Pick a video, like it, save it. Open its comments, sort by time, like the top one, and reply 'haha' with a smiley emoji.
 ```
 
-## Deep links + learning
+## Deep Links & Learning
 
 One command instead of *open app → tap search → type → submit*:
 
