@@ -7,7 +7,7 @@
 
 <br>
 
-When an app exposes a [deep link](https://en.wikipedia.org/wiki/Deep_linking), the skill invokes it directly, without GUI navigation. Each successful invocation contributes a reusable pattern to a registry that later sessions inherit. Otherwise, the agent observes each screenshot and issues tap, swipe, or type actions.
+When an app exposes a [deep link](https://developer.android.com/training/app-links/deep-linking), the skill invokes it directly, without GUI navigation. Each successful invocation contributes a reusable pattern to a registry that later sessions inherit. Otherwise, the agent observes each screenshot and issues tap, swipe, or type actions.
 
 ## Install
 
