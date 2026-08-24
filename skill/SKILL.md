@@ -85,6 +85,7 @@ msk --json app open com.android.settings --session <id>
 
 - Treat `wait` as a fixed delay, not visual-stability detection.
 - Confirm input focus before `type`. For Unicode, first confirm `checks.input.unicode.status=ready`. If `type` returns `unicode_input_unavailable` (no supported helper IME installed), do not retry — request user takeover for that text.
+- A successful `type` response only means the keystrokes were dispatched (`adb-input-text`) or the ADBKeyboard broadcast was delivered (`adb-keyboard-broadcast`) — it does NOT prove any input field received the text. Always re-observe after `type` and visually confirm the text appeared; if it did not, the earlier tap that should have focused the field probably missed. Fix the tap, do not repeat the `type`.
 - Use `press` for `enter`, `return`, `space`, `backspace`, `delete`, `tab`, `escape`, `volume-up`, or `volume-down`; prefer the dedicated navigation actions.
 - Pass the exact installed Android package name to `app open`. Do not guess. If the package name is unknown or `app open` returns `app_not_found`, run `msk --json apps list --user-visible` to see the installed launcher apps, or fall back to `msk home` and locate the app visually on the launcher.
 - Observe after every action. Verify uncertain results visually and never retry a side-effecting action blindly.

@@ -376,16 +376,19 @@ def _type_unicode_with_adb_keyboard(serial: str, text: str) -> str:
         )
         if "result=-1" not in output:
             raise AndroidError(
-                "Unicode text was not accepted by the focused input field",
+                "the ADBKeyboard broadcast was not delivered",
                 "unicode_input_failed",
-                "wait until the field and keyboard are visibly focused, then try once more",
+                "verify the helper IME is enabled and try again",
             )
     finally:
         if original_ime and original_ime != "null":
             run_adb("shell", "ime", "set", original_ime, serial=serial)
         if not was_enabled:
             run_adb("shell", "ime", "disable", ADB_KEYBOARD_IME, serial=serial)
-    return "adb-keyboard"
+    # The broadcast reached ADBKeyboard's receiver; that does NOT prove the
+    # focused input field received text (or that any field is focused at all).
+    # The caller must re-observe and visually confirm the text landed.
+    return "adb-keyboard-broadcast"
 
 
 def type_text(serial: str, text: str) -> str:
