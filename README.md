@@ -21,7 +21,7 @@ Needs Python 3.11+, `adb`, and an unlocked Android phone with USB debugging on.
 
 ## Use
 
-Describe the goal in plain language. Codex prefixes the skill with `$`.
+Describe the goal in plain language.
 
 ```text
 Use mobile-skill to open Bilibili, search for Minecraft, sort results by view count, and filter to the past week. Pick a video, like it, save it. Open its comments, sort by time, like the top one, and reply 'haha' with a smiley emoji.
