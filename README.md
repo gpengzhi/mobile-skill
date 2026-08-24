@@ -7,9 +7,9 @@
 
 <br>
 
-The agent sees each screenshot and taps, swipes, types, or opens any app — GUI the way a person would.
+When an app exposes a deep link, `msk` warps straight in — and remembers what works, so the skill gets sharper the more you use it.
 
-When an app exposes a deep link, `msk` warps straight in. The skill remembers what works, so it gets sharper the more you use it.
+For everything else, the agent sees each screenshot and taps, swipes, types the way a person would.
 
 ## Install
 
@@ -39,7 +39,7 @@ msk --json app open-url "bilibili://search?keyword=Minecraft" --session <id>
 
 **25 URL templates across 9 apps** — Bilibili, Zhihu, Kuaishou, Taobao, Xianyu, Amap, Weibo, Alipay, WeChat — ship in [`registry/deeplinks.json`](registry/deeplinks.json).
 
-For anything else, `msk` learns as it goes — URLs that work are remembered for later sessions.
+For anything else, `msk` learns as it goes. Every URL that works this session becomes shared knowledge for the next — automatically.
 
 Sensitive actions — spending money, sending messages, posting content — never warp. They stay in the visible tap-by-tap flow.
 
