@@ -31,7 +31,7 @@ Use mobile-skill to open the calculator, calculate 128 × 64, and report the res
 
 - Vision-capable models only.
 - One phone over USB — no iOS, no Wi-Fi ADB.
-- Login walls pause the loop and hand back to you.
+- Cannot log in, enter OTPs, or complete payments.
 - No OCR or accessibility trees — precision is bounded by the model's eyes.
 
 ## More
