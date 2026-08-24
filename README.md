@@ -7,9 +7,9 @@
   <sub>Screenshot-grounded Android control with deep-link acceleration and explicit safety boundaries.</sub>
   <br>
   <br>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white" alt="Android">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
 </div>
 
 `mobile-skill` lets AI agents operate a USB-connected Android phone. The agent opens each screenshot, reasons about the visible UI, performs one atomic action, and verifies the result before continuing.
