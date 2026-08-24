@@ -29,23 +29,23 @@ Use mobile-skill to open Bilibili, search for Minecraft, sort results by view co
 
 ## Deep Links & Learning
 
-One command instead of *open app → tap search → type → submit*:
+A single command replaces the sequence *open app → tap search → type → submit*:
 
 ```bash
 msk --json app open-url "bilibili://search?keyword=Minecraft" --session <id>
 ```
 
-**25 URL templates across 9 apps** — Bilibili, Zhihu, Kuaishou, Taobao, Xianyu, Amap, Weibo, Alipay, WeChat — ship in [`registry/deeplinks.json`](registry/deeplinks.json).
+The registry ships with **25 URL templates across 9 apps**: Bilibili, Zhihu, Kuaishou, Taobao, Xianyu, Amap, Weibo, Alipay, WeChat (see [`registry/deeplinks.json`](registry/deeplinks.json)).
 
-For anything else, `msk` learns as it goes. Every URL that works this session becomes shared knowledge for the next — automatically.
+Outside the curated set, each successful invocation contributes a reusable pattern to a local registry that subsequent sessions inherit.
 
-Sensitive actions — spending money, sending messages, posting content — never warp. They stay in the visible tap-by-tap flow.
+Sensitive actions (payments, messaging, content publication) are refused on the deep-link path and must proceed through the GUI.
 
 ## Limits
 
 - Vision-capable models only.
-- One phone over USB — no iOS, no Wi-Fi ADB.
-- No OCR or accessibility trees — precision is bounded by the model's eyes.
+- One Android phone over USB; no iOS, no Wi-Fi ADB.
+- No OCR or accessibility trees; targeting precision is bounded by the model's vision.
 
 ## More
 
