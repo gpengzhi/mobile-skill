@@ -1,6 +1,8 @@
 # AGENT_INSTALL.md — installing mobile-skill
 
-Instructions for a coding agent (Codex or Claude Code) installing mobile-skill on the user's machine. Follow the steps in order, run the checks yourself, and report the final `doctor` status to the user. Do not skip the verification step.
+Instructions for a coding agent installing mobile-skill on the user's machine. Follow the steps in order, run the checks yourself, and report the final `doctor` status to the user. Do not skip the verification step.
+
+Registered harnesses: `claude-code`, `codex`, `cursor`, `openclaw`, `codebuddy`, `workbuddy`, `pi`, `hermes`, `kimi-code`. Any other agent with a `<home>/skills/<name>/SKILL.md` convention installs manually via `--home` (see below).
 
 ## Prerequisites
 
@@ -15,7 +17,7 @@ Run from the repo root (clone it first if you have not):
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-./msk install codex          # or claude-code
+./msk install <your-harness>   # e.g. codex, claude-code, cursor, kimi-code
 ```
 
 The `msk` launcher prefers `.venv` automatically, so the dependency keeps working from any shell — no activation needed. Installation symlinks the launcher to `~/.local/bin/msk` and the skill into the agent's skill directory; keep the checkout in place (updates apply on `git pull`).
@@ -24,13 +26,7 @@ If `command -v msk` fails afterwards, `~/.local/bin` is not on `PATH` — either
 
 ### Other agents
 
-Registered harnesses print with:
-
-```bash
-./msk --json install --list
-```
-
-For any shell-capable agent with a `skills/` directory convention that is not in the table, install manually:
+Registered harnesses print with `./msk --json install --list`. For a shell-capable agent whose `skills/` directory is not in the table, install manually:
 
 ```bash
 ./msk install --home <agent-home-dir>
@@ -41,7 +37,7 @@ This drops the skill at `<agent-home-dir>/skills/mobile-skill/`. The launcher sy
 ## Verify
 
 ```bash
-./msk --json doctor --agent codex
+./msk --json doctor --agent <your-harness>
 ```
 
 Success criteria:

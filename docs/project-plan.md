@@ -11,7 +11,7 @@ Provide reliable screenshot-driven Android GUI navigation for local coding Agent
 - Tap, double-tap, long-press, swipe, wait, text input, key presses, app launch
 - Installed-app inventory (`msk apps list`) as a text-based fallback when a package name is unknown
 - Session lease with observation-staleness protection, pause/resume, human takeover, and idle-timeout cleanup
-- Skill installation from a source checkout for registered harnesses (Codex and Claude Code today; `msk install --list`) plus a generic `msk install --home <dir>` path for any agent with the same `skills/` convention
+- Skill installation from a source checkout for registered harnesses — Claude Code, Codex, Cursor, OpenClaw, CodeBuddy, WorkBuddy, Pi, Hermes, Kimi Code (`msk install --list`) — plus `msk install --home <dir>` for any agent with the same `<home>/skills/<name>/SKILL.md` convention
 - Automatic cleanup of stopped/idle sessions and orphaned screenshots
 
 ## Not supported

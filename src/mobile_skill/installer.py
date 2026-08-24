@@ -12,6 +12,10 @@ from .errors import MobileSkillError
 
 SKILL_DIR_NAME = "mobile-skill"
 
+# Skill install paths per harness. Layout is <default_home>/skills/<SKILL_DIR_NAME>/;
+# when `home_env` is set and non-empty, its value overrides `default_home`.
+# Codex reads from ~/.agents/skills (not ~/.codex/skills) — verified against
+# BrowserSkill's harness table at Tencent/BrowserSkill:crates/bsk-cli/src/skill_install/harness.rs.
 HARNESSES: dict[str, dict[str, str | None]] = {
     "claude-code": {
         "cli": "claude",
@@ -21,9 +25,51 @@ HARNESSES: dict[str, dict[str, str | None]] = {
     },
     "codex": {
         "cli": "codex",
-        "home_env": "CODEX_HOME",
-        "default_home": "~/.codex",
+        "home_env": None,
+        "default_home": "~/.agents",
         "image_tool": "view_image",
+    },
+    "cursor": {
+        "cli": "cursor",
+        "home_env": None,
+        "default_home": "~/.cursor",
+        "image_tool": None,
+    },
+    "openclaw": {
+        "cli": "openclaw",
+        "home_env": None,
+        "default_home": "~/.openclaw",
+        "image_tool": None,
+    },
+    "codebuddy": {
+        "cli": "codebuddy",
+        "home_env": None,
+        "default_home": "~/.codebuddy",
+        "image_tool": None,
+    },
+    "workbuddy": {
+        "cli": "workbuddy",
+        "home_env": None,
+        "default_home": "~/.workbuddy",
+        "image_tool": None,
+    },
+    "pi": {
+        "cli": "pi",
+        "home_env": None,
+        "default_home": "~/.pi/agent",
+        "image_tool": None,
+    },
+    "hermes": {
+        "cli": "hermes",
+        "home_env": "HERMES_HOME",
+        "default_home": "~/.hermes",
+        "image_tool": None,
+    },
+    "kimi-code": {
+        "cli": "kimi",
+        "home_env": "KIMI_CODE_HOME",
+        "default_home": "~/.kimi-code",
+        "image_tool": None,
     },
 }
 
@@ -80,13 +126,6 @@ def _link(source: Path, destination: Path) -> None:
 
 
 def _do_install(label: str, home: Path, cli: str | None) -> dict[str, Any]:
-    if cli is not None and shutil.which(cli) is None:
-        raise MobileSkillError(
-            f"{label.replace('-', '_')}_not_found",
-            f"{cli} CLI is not installed",
-            f"install {cli}, then rerun `msk install {label}`",
-        )
-
     root = project_root()
     launcher = launcher_source(root)
     source = skill_source(root)
@@ -95,15 +134,23 @@ def _do_install(label: str, home: Path, cli: str | None) -> dict[str, Any]:
     skill_link = home / "skills" / SKILL_DIR_NAME
     _link(launcher, cli_link)
     _link(source, skill_link)
-    next_action = (
-        f"restart {cli}, then run `msk doctor --agent {label}`"
-        if cli
-        else f"restart the target agent and load {skill_link}, then run `msk doctor`"
-    )
+
+    cli_missing = cli is not None and shutil.which(cli) is None
+    if cli_missing:
+        next_action = (
+            f"install the {cli} CLI, then run `msk doctor --agent {label}`"
+        )
+    elif cli:
+        next_action = f"restart {cli}, then run `msk doctor --agent {label}`"
+    else:
+        next_action = (
+            f"restart the target agent and load {skill_link}, then run `msk doctor`"
+        )
     return {
         "agent": label,
         "cli": str(cli_link),
         "skill": str(skill_link),
+        "harness_cli_present": None if cli is None else not cli_missing,
         "next_action": next_action,
     }
 
