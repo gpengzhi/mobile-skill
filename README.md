@@ -2,12 +2,12 @@
   <img src="assets/mobile-skill-banner.png" alt="mobile-skill" width="100%">
   <br>
   <br>
-  <strong>Give your coding agent a real Android phone.</strong>
+  <strong>Let AI agent drive a real Android phone.</strong>
 </div>
 
 <br>
 
-Every screenshot is a lease: the agent's tap or swipe must cite the exact frame it just looked at, or `msk` rejects it as stale. No blind retries after a shaky capture, no typing PINs — just `adb`, normalized coordinates, and a safety loop that keeps every action accountable to what the model actually saw.
+`msk` binds every action to the screenshot the agent just saw — stale actions bounce, PINs stay yours.
 
 ## Install
 
