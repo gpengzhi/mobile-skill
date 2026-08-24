@@ -52,16 +52,17 @@ The request authorizes only the stated actions. Sending, posting, purchasing, de
 ## How It Works
 
 ```mermaid
-flowchart LR
-    A[Goal] --> B{Reusable deep link?}
-    B -- Yes --> D[Open]
-    B -- No --> C{Trusted new link?}
-    C -- Yes, try once --> D
-    C -- No --> G[Use GUI]
-    D --> E[Verify]
-    E -- Works --> F[Save reusable pattern]
-    E -- Fails --> G
-    F --> G
+flowchart TD
+    A[Observe and verify current state] --> B{Goal complete?}
+    B -- Yes --> C[Finish]
+    B -- No --> D{Choose next action}
+    D -- Reusable deep link --> E[Open]
+    D -- Trusted new deep link --> F[Try once]
+    D -- GUI --> G[One atomic action]
+    E --> H[Record pattern and outcome]
+    F --> H
+    H --> A
+    G --> A
 ```
 
 The core loop is deliberately atomic:
