@@ -1,6 +1,6 @@
 ---
 name: mobile-skill
-description: Control a real Android phone through screenshot observation and atomic `msk` GUI actions. Use when Codex or Claude Code needs to inspect or operate an ADB-connected phone by opening apps, tapping, swiping, typing, pressing navigation keys, waiting, or diagnosing the device connection.
+description: Control a real Android phone through screenshot observation and atomic `msk` GUI actions. Use when an agent needs to inspect or operate an ADB-connected phone by opening apps, tapping, swiping, typing, pressing navigation keys, waiting, or diagnosing the device connection.
 ---
 
 # mobile-skill
@@ -67,9 +67,9 @@ Add `--observe-after` to wait for the action-specific default settling delay and
 
 You are the stability check: if the returned image looks transitional — mid-animation, a list still gliding, a page only partially drawn, a keyboard sliding in — run `wait` and observe again before acting. Decelerating flings can look almost still in a single frame, so when in doubt after a `swipe`, wait and re-observe.
 
-- Tap near the center of a visible target.
+- Tap near the center of a visible target. A tap that lands outside any interactive element completes silently — if the next observation looks unchanged, the tap missed the bounding box. Re-estimate from the fresh image; do not repeat the same coordinate.
 - Use `double-tap` only when the interface requires that gesture.
-- Move `swipe` from `(X1, Y1)` to `(X2, Y2)`. To browse downward, swipe upward inside a safe scrollable area.
+- To browse downward, swipe upward inside a safe scrollable area.
 
 Use an active Session for other actions:
 
@@ -102,7 +102,7 @@ msk --json app registry [<package>]         # curated URL templates shipped with
 msk --json app schemes <package>            # URI schemes the app declares in its manifest
 ```
 
-The registry ships a small curated set (Bilibili, Taobao, Alipay, WeChat, Amap). Any listed template's `params` are the `{placeholders}` you fill in. For apps not in the registry, `schemes` tells you which URI schemes the app is willing to receive; you still need to know the exact path (from public docs, prior knowledge, or by falling back to GUI).
+Call `msk app registry` (with or without a package) to see the curated set. Any listed template's `params` are the `{placeholders}` you fill in. For apps not in the registry, `schemes` tells you which URI schemes the app is willing to receive; you still need to know the exact path (from public docs, prior knowledge, or by falling back to GUI).
 
 Invocation:
 
