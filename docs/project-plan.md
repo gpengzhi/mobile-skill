@@ -13,7 +13,7 @@ Provide reliable screenshot-driven Android GUI navigation for local coding Agent
 - Session lease with observation-staleness protection, pause/resume, human takeover, and idle-timeout cleanup
 - Skill installation from a source checkout for registered harnesses — Claude Code, Codex, Cursor, OpenClaw, CodeBuddy, WorkBuddy, Pi, Hermes, Kimi Code (`msk install --list`) — plus `msk install --home <dir>` for any agent with the same `<home>/skills/<name>/SKILL.md` convention
 - Automatic cleanup of stopped/idle sessions and orphaned screenshots
-- Deep-link discovery and invocation: `msk app schemes` (dumpsys-based), `msk app registry` (curated templates for major apps), `msk app open-url` (pre-checked via `pm resolve-activity`, sensitive URLs blocked). Learning of new templates from usage is planned for Phase 2.
+- Deep-link discovery and invocation: `msk app schemes` (dumpsys-based), `msk app registry` (curated + learned templates), `msk app open-url` (pre-checked via `pm resolve-activity`, sensitive URLs blocked, post-invocation landing verified against foreground activity). Self-evolution: successful invocations are normalized to structural templates (`bilibili://space/{...}`, never concrete URLs) and accumulated in `~/.local/state/mobile-skill/learned_deeplinks.json` with `invocations` / `verified` / `hijacked` counters that `msk app registry` overlays onto curated entries.
 
 ## Not supported
 

@@ -325,6 +325,13 @@ def _complete_action(
     result["next_observation"] = {
         key: value for key, value in next_observation.items() if key != "ok"
     }
+    if action.get("action") == "app-open-url":
+        outcome_info = deeplinks.finalize_open_url(
+            serial=serial,
+            url=action.get("url", ""),
+            expected_activity=action.get("resolved_activity"),
+        )
+        result["deeplink_outcome"] = outcome_info
     return result
 
 

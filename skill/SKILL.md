@@ -116,6 +116,18 @@ msk --json app open-url "bilibili://search?keyword=Minecraft" --session <id> --o
 
 Prefer deep link when: the registry has the entry, or the destination is a stable in-app screen (search, item, profile, video). Prefer GUI when: the destination is inside a workflow that needs user state (login, cart, chat), or when deep-link attempts already failed once for this URL.
 
+### Learned entries
+
+`msk app registry` returns curated entries (shipped, human-vetted) alongside `learned` entries (discovered locally from prior successful invocations). Each entry carries `invocations` and `verified` / `hijacked` / `unknown` counts:
+
+- `verified`: URL landed in the target app (same package). Trust this pattern.
+- `hijacked`: URL was captured by a different app. Do not reuse blindly.
+- `unknown`: the landing package could not be observed. Weak signal.
+
+Learned entries are stored as **structural templates** (e.g. `bilibili://space/{...}`), never as concrete URLs, so the file grows with the app's capabilities, not with usage volume.
+
+**Caveat**: A learned template may over-generalize a query value that is actually a fixed constant. Some apps use IDs like `appId=10000007` as feature codes, not user-supplied values — filling a different number into that position returns `deeplink_unresolvable`. If a learned template fails on your first fill, treat it as unreliable for that variable and fall back to GUI or curated.
+
 ## Human Takeover
 
 Pause for passwords, OTPs, PINs, biometrics, payments, private information, or permission decisions:
