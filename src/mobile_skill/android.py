@@ -82,9 +82,6 @@ def shell_quote(value: str) -> str:
     return "'" + value.replace("'", "'\\''") + "'"
 
 
-_shell_quote = shell_quote  # legacy internal alias
-
-
 def list_devices() -> list[dict[str, str]]:
     output = run_adb("devices", "-l")
     devices = []
@@ -171,7 +168,7 @@ def require_installed_app(serial: str, app_id: str) -> str:
     if not app_id or any(character.isspace() or ord(character) < 32 for character in app_id):
         raise AndroidError("Android app id is invalid", "invalid_app_id")
     output = run_adb(
-        "shell", "pm", "list", "packages", _shell_quote(app_id), serial=serial
+        "shell", "pm", "list", "packages", shell_quote(app_id), serial=serial
     )
     installed = {
         line.removeprefix("package:").strip()
@@ -414,7 +411,7 @@ def type_text(serial: str, text: str) -> str:
 def _type_segment(serial: str, text: str) -> str:
     if _needs_ime(text):
         return _type_unicode_with_adb_keyboard(serial, text)
-    encoded = _shell_quote(text.replace(" ", "%s"))
+    encoded = shell_quote(text.replace(" ", "%s"))
     run_adb("shell", "input", "text", encoded, serial=serial)
     return "adb-input-text"
 
@@ -479,7 +476,7 @@ def app_switcher(serial: str) -> None:
 def launch_app(serial: str, package: str) -> str:
     require_installed_app(serial, package)
     component = _resolve_launcher_component(serial, package)
-    run_adb("shell", "am", "start", "-n", _shell_quote(component), serial=serial)
+    run_adb("shell", "am", "start", "-n", shell_quote(component), serial=serial)
     return package
 
 
@@ -534,7 +531,7 @@ def _resolve_launcher_component(serial: str, package: str) -> str:
     prefix = package + "/"
     attempts: dict[str, str] = {}
     lookups = (
-        ("resolve", ("cmd", "package", "resolve-activity", "--brief", *_LAUNCHER_INTENT_ARGS, _shell_quote(package))),
+        ("resolve", ("cmd", "package", "resolve-activity", "--brief", *_LAUNCHER_INTENT_ARGS, shell_quote(package))),
         ("query", ("cmd", "package", "query-activities", "--brief", *_LAUNCHER_INTENT_ARGS)),
     )
     for label, arguments in lookups:
