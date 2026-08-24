@@ -7,7 +7,7 @@
 
 <br>
 
-`msk` binds every action to the screenshot the agent just saw — stale actions bounce, PINs stay yours.
+The agent sees each screenshot and can tap, swipe, type, or launch any app.
 
 ## Install
 
