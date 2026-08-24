@@ -268,7 +268,7 @@ def merged_registry(package: str | None = None) -> list[dict[str, Any]]:
     learned_apps = load_learned_registry().get("apps", {})
     packages = set(curated_apps) | set(learned_apps)
     if package is not None:
-        packages = {package} if package in packages else {package}
+        packages = {package}
 
     _COUNTER_FIELDS = (
         "invocations",
