@@ -7,9 +7,7 @@
 
 <br>
 
-When an app exposes a deep link, `msk` warps straight in — and remembers what works, so the skill gets sharper the more you use it.
-
-For everything else, the agent sees each screenshot and taps, swipes, types the way a person would.
+When an app exposes a deep link, `msk` warps straight in — and remembers what works, so the skill gets sharper the more you use it. For everything else, the agent sees each screenshot and taps, swipes, types the way a person would.
 
 ## Install
 
