@@ -31,15 +31,11 @@ Use mobile-skill to open Bilibili, search for Minecraft, sort results by view co
 
 ## Deep Links & Learning
 
-One command instead of *open app → tap search → type → submit*:
+Where an app exposes a deep link, `msk app open-url "bilibili://search?keyword=Minecraft"` warps in — one command instead of *open app → tap search → type → submit*. **25 URL templates across 9 apps** ship in [`registry/deeplinks.json`](registry/deeplinks.json).
 
-```bash
-msk --json app open-url "bilibili://search?keyword=Minecraft" --session <id>
-```
+For anything else, `msk` learns as it goes. Once a URL lands in the target app, its **structural template** is stored — `bilibili://space/12345678` becomes `bilibili://space/{...}`, never the concrete value. The next session inherits. `msk app registry` returns curated + learned in one merged view with invocation counts.
 
-Ships with **9 curated apps × 25 URL templates** — Bilibili, Zhihu, Kuaishou, Taobao, Xianyu, Amap, Weibo, Alipay, WeChat — recorded in [`registry/deeplinks.json`](registry/deeplinks.json).
-
-For URLs outside the curated set, agents try a plausible URL. If `pm resolve-activity` accepts it *and* the target app foregrounds after invocation, `msk` records the **structural template** (`bilibili://space/12345678` → `bilibili://space/{...}`, never the concrete URL) into a per-user learned registry that the next session inherits. `msk app registry` returns curated + learned in one view, with invocation counts and same-package-landing verification. URLs with `pay` / `transfer` / `send` / `publish` / `share` in them are blocked unless they match a curated template exactly.
+URLs with `pay` / `transfer` / `send` / `publish` / `share` in them won't fire unless they match a curated entry exactly.
 
 ## Limits
 
