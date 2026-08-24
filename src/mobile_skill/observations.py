@@ -37,9 +37,10 @@ def unlock_ttl_s() -> float:
 
 def ensure_session_unlocked(session: dict[str, Any], serial: str) -> None:
     """Verify the phone is unlocked, respecting the session's 30s unlock cache."""
+    ttl = unlock_ttl_s()  # parse the env var eagerly so a bad value fails fast
     verified_at = session.get("unlock_verified_at")
     now = time.time()
-    if verified_at is not None and now - verified_at < unlock_ttl_s():
+    if verified_at is not None and now - verified_at < ttl:
         return
     android.ensure_unlocked(serial)
     state.update_session(session["id"], unlock_verified_at=now)
