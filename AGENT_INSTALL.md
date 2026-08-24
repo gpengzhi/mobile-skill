@@ -22,6 +22,22 @@ The `msk` launcher prefers `.venv` automatically, so the dependency keeps workin
 
 If `command -v msk` fails afterwards, `~/.local/bin` is not on `PATH` — either add it or keep invoking `./msk` from the repo.
 
+### Other agents
+
+Registered harnesses print with:
+
+```bash
+./msk --json install --list
+```
+
+For any shell-capable agent with a `skills/` directory convention that is not in the table, install manually:
+
+```bash
+./msk install --home <agent-home-dir>
+```
+
+This drops the skill at `<agent-home-dir>/skills/mobile-skill/`. The launcher symlink is still placed at `~/.local/bin/msk`. Afterwards restart that agent's CLI and run `./msk doctor` to confirm the environment is healthy — the agent-specific `--agent` check only fires for names registered in the table.
+
 ## Verify
 
 ```bash

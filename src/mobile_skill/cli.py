@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 from . import android, diagnostics, installer, observations, onboard, state
@@ -74,7 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("version")
 
     doctor = commands.add_parser("doctor")
-    doctor.add_argument("--agent", choices=("codex", "claude-code"))
+    doctor.add_argument("--agent")
     commands.add_parser("devices")
 
     onboard_command = commands.add_parser("onboard")
@@ -83,7 +84,21 @@ def build_parser() -> argparse.ArgumentParser:
     onboard_command.add_argument("--retries", type=int, default=1)
 
     install = commands.add_parser("install")
-    install.add_argument("agent", choices=("codex", "claude-code"))
+    install.add_argument("agent", nargs="?")
+    install.add_argument(
+        "--list",
+        action="store_true",
+        dest="list_harnesses",
+        help="print the registered harness table and exit",
+    )
+    install.add_argument(
+        "--home",
+        help="install to <home>/skills/mobile-skill/ for a harness not in the table",
+    )
+    install.add_argument(
+        "--name",
+        help="label to record for a --home install (defaults to the home directory name)",
+    )
 
     cleanup = commands.add_parser("cleanup")
     cleanup.add_argument("--older-than-days", type=int)
@@ -461,10 +476,17 @@ def _dispatch(args: argparse.Namespace) -> Any:
             )
         )
     if args.command == "install":
-        install_agent = (
-            installer.install_codex if args.agent == "codex" else installer.install_claude_code
-        )
-        return _ok(**install_agent())
+        if args.list_harnesses:
+            return _ok(harnesses=installer.registered_harnesses())
+        if args.home:
+            return _ok(**installer.install_to_home(Path(args.home), args.name))
+        if not args.agent:
+            raise MobileSkillError(
+                "install_target_missing",
+                "specify a harness name, --home <dir>, or --list",
+                "run `msk install --list` to see registered harnesses",
+            )
+        return _ok(**installer.install(args.agent))
     if args.command == "cleanup":
         return _ok(
             cleanup=state.cleanup(

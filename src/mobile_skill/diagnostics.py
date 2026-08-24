@@ -15,7 +15,7 @@ try:
 except ImportError:
     PIL = None
 
-from . import android, state
+from . import android, installer, state
 
 
 PILLOW_REQUIRED_MAJOR = 10
@@ -42,16 +42,24 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def _agent_checks(agent: str) -> dict[str, Any]:
-    if agent == "codex":
-        command = "codex"
-        home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-        install_hint = "run `msk install codex`"
-        image_tool = "view_image"
-    else:
-        command = "claude"
-        home = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
-        install_hint = "run `msk install claude-code`"
-        image_tool = "Read"
+    if agent not in installer.HARNESSES:
+        registered = ", ".join(sorted(installer.HARNESSES))
+        return {
+            "harness": _check(
+                "unknown",
+                registered=sorted(installer.HARNESSES),
+                hint=(
+                    f"unknown harness {agent!r}; registered: {registered}. "
+                    "Run `msk install --list` or install manually with `msk install --home <dir>`."
+                ),
+            ),
+        }
+
+    spec = installer.HARNESSES[agent]
+    command = str(spec["cli"])
+    home = installer.harness_home(agent)
+    install_hint = f"run `msk install {agent}`"
+    image_tool = spec["image_tool"]
 
     executable = shutil.which(command)
     if executable is None:
@@ -70,7 +78,7 @@ def _agent_checks(agent: str) -> dict[str, Any]:
         )
     except (OSError, subprocess.SubprocessError) as error:
         cli = _check("error", path=executable, message=str(error))
-    skill_path = home / "skills" / "mobile-skill" / "SKILL.md"
+    skill_path = home / "skills" / installer.SKILL_DIR_NAME / "SKILL.md"
 
     return {
         "cli": cli,
@@ -86,14 +94,6 @@ def _agent_checks(agent: str) -> dict[str, Any]:
             hint="run a visual black-box test with the configured model",
         ),
     }
-
-
-def codex_checks() -> dict[str, Any]:
-    return _agent_checks("codex")
-
-
-def claude_code_checks() -> dict[str, Any]:
-    return _agent_checks("claude-code")
 
 
 def doctor(agent: str | None = None, serial: str | None = None) -> dict[str, Any]:
@@ -171,8 +171,8 @@ def doctor(agent: str | None = None, serial: str | None = None) -> dict[str, Any
     else:
         result["status"] = "no-ready-device"
 
-    if agent in {"codex", "claude-code"}:
-        agent_checks = codex_checks() if agent == "codex" else claude_code_checks()
+    if agent:
+        agent_checks = _agent_checks(agent)
         checks[agent] = agent_checks
         if any(
             item["status"] not in {"ready", "unverified"}

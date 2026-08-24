@@ -10,6 +10,24 @@ from typing import Any
 from .errors import MobileSkillError
 
 
+SKILL_DIR_NAME = "mobile-skill"
+
+HARNESSES: dict[str, dict[str, str | None]] = {
+    "claude-code": {
+        "cli": "claude",
+        "home_env": "CLAUDE_CONFIG_DIR",
+        "default_home": "~/.claude",
+        "image_tool": "Read",
+    },
+    "codex": {
+        "cli": "codex",
+        "home_env": "CODEX_HOME",
+        "default_home": "~/.codex",
+        "image_tool": "view_image",
+    },
+}
+
+
 def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -36,6 +54,14 @@ def launcher_source(root: Path | None = None) -> Path:
     )
 
 
+def harness_home(name: str) -> Path:
+    entry = HARNESSES[name]
+    env_name = entry["home_env"]
+    if env_name and os.environ.get(env_name):
+        return Path(os.environ[env_name]).expanduser()
+    return Path(str(entry["default_home"])).expanduser()
+
+
 def _link(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.is_symlink():
@@ -53,12 +79,12 @@ def _link(source: Path, destination: Path) -> None:
     destination.symlink_to(source)
 
 
-def _install(agent: str, command: str, skill_home: Path) -> dict[str, Any]:
-    if shutil.which(command) is None:
+def _do_install(label: str, home: Path, cli: str | None) -> dict[str, Any]:
+    if cli is not None and shutil.which(cli) is None:
         raise MobileSkillError(
-            f"{agent.replace('-', '_')}_not_found",
-            f"{command} CLI is not installed",
-            f"install {command}, then rerun `msk install {agent}`",
+            f"{label.replace('-', '_')}_not_found",
+            f"{cli} CLI is not installed",
+            f"install {cli}, then rerun `msk install {label}`",
         )
 
     root = project_root()
@@ -66,22 +92,70 @@ def _install(agent: str, command: str, skill_home: Path) -> dict[str, Any]:
     source = skill_source(root)
 
     cli_link = Path.home() / ".local" / "bin" / "msk"
-    skill_link = skill_home / "skills" / "mobile-skill"
+    skill_link = home / "skills" / SKILL_DIR_NAME
     _link(launcher, cli_link)
     _link(source, skill_link)
+    next_action = (
+        f"restart {cli}, then run `msk doctor --agent {label}`"
+        if cli
+        else f"restart the target agent and load {skill_link}, then run `msk doctor`"
+    )
     return {
-        "agent": agent,
+        "agent": label,
         "cli": str(cli_link),
         "skill": str(skill_link),
-        "next_action": f"restart {command}, then run `msk doctor --agent {agent}`",
+        "next_action": next_action,
     }
 
 
+def install(name: str) -> dict[str, Any]:
+    if name not in HARNESSES:
+        listing = ", ".join(sorted(HARNESSES))
+        raise MobileSkillError(
+            "unknown_harness",
+            f"unknown harness: {name}",
+            (
+                f"run `msk install --list` (registered: {listing}) or use "
+                "`msk install --home <dir>` for a manual install"
+            ),
+        )
+    entry = HARNESSES[name]
+    return _do_install(name, harness_home(name), entry["cli"])
+
+
+def install_to_home(home: Path, label: str | None = None) -> dict[str, Any]:
+    resolved = Path(home).expanduser().resolve()
+    if not resolved.parent.exists():
+        raise MobileSkillError(
+            "install_home_missing",
+            f"parent directory does not exist: {resolved.parent}",
+            "create the parent directory or point --home at an existing one",
+        )
+    display = label or resolved.name or "generic"
+    return _do_install(display, resolved, None)
+
+
+def registered_harnesses() -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for name, spec in HARNESSES.items():
+        home = harness_home(name)
+        entries.append(
+            {
+                "name": name,
+                "cli": spec["cli"],
+                "home_env": spec["home_env"],
+                "default_home": spec["default_home"],
+                "home": str(home),
+                "skill_path": str(home / "skills" / SKILL_DIR_NAME),
+                "image_tool": spec["image_tool"],
+            }
+        )
+    return entries
+
+
 def install_codex() -> dict[str, Any]:
-    home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-    return _install("codex", "codex", home)
+    return install("codex")
 
 
 def install_claude_code() -> dict[str, Any]:
-    home = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
-    return _install("claude-code", "claude", home)
+    return install("claude-code")
