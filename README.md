@@ -9,7 +9,7 @@
 
 The agent sees each screenshot and taps, swipes, types, or opens any app — GUI the way a person would.
 
-When an app exposes a deep link, `msk` warps straight in; every successful jump becomes a URL template the next agent inherits, so the skill gets sharper the more it is used.
+When an app exposes a deep link, `msk` warps straight in. The skill remembers what works, so it gets sharper the more you use it.
 
 ## Install
 
