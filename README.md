@@ -7,7 +7,7 @@
 
 <br>
 
-The agent sees each screenshot and can tap, swipe, type, or launch any app.
+The agent sees each screenshot and can tap, swipe, type, press keys, or open any app — enough to work through real tasks the way a person would.
 
 ## Install
 
