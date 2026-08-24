@@ -480,9 +480,12 @@ def finalize_open_url(
     outcome = classify_outcome(expected_activity, actual)
     template = normalize_to_template(url)
 
-    if is_sensitive_url(url) or is_sensitive_url(template):
-        # Belt and braces: sensitive URLs should never have gotten past
-        # open_url anyway, but if they did, do not persist them.
+    # Belt-and-braces: mirror the check in open_url. Sensitive URLs are
+    # permitted only when their concrete form matches a curated template
+    # (e.g. `alipays://platformapi/startapp?appId=10000007` — the URL
+    # contains "pay" because the scheme is `alipays`, not because the
+    # operation is a payment).
+    if (is_sensitive_url(url) or is_sensitive_url(template)) and not _url_matches_curated_template(url):
         return {"actual_activity": actual, "outcome": outcome, "recorded": False}
 
     if not passes_template_invariant(template):
