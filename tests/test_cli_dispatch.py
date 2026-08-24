@@ -7,12 +7,13 @@ canned android.capture for screenshots.
 from __future__ import annotations
 
 import io
+import threading
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
-from mobile_skill import android, cli, deeplinks
+from mobile_skill import android, cli, deeplinks, state
 from mobile_skill.errors import MobileSkillError
 
 
@@ -86,6 +87,95 @@ def test_tap_invalidates_observation(cli_env) -> None:
     assert excinfo.value.code == "stale_observation"
 
 
+def test_tap_timeout_marks_result_unknown_and_invalidates_observation(cli_env) -> None:
+    started = _run("session", "start")
+    session_id = started["session"]["id"]
+    observed = _run("observe", "--session", session_id)
+    obs_id = observed["observation_id"]
+    cli_env.when(
+        "shell", "input", "tap",
+        returns=android.AndroidError("adb command timed out", "timeout"),
+    )
+
+    with pytest.raises(MobileSkillError) as excinfo:
+        _run("tap", "500", "500", "--session", session_id, "--observation", obs_id)
+
+    assert excinfo.value.code == "action_result_unknown"
+    assert excinfo.value.details["action_may_have_applied"] is True
+    assert excinfo.value.details["action"]["action"] == "tap"
+    with pytest.raises(MobileSkillError) as stale:
+        _run("tap", "500", "500", "--session", session_id, "--observation", obs_id)
+    assert stale.value.code == "stale_observation"
+
+
+def test_double_tap_partial_failure_marks_result_unknown(cli_env) -> None:
+    started = _run("session", "start")
+    session_id = started["session"]["id"]
+    observed = _run("observe", "--session", session_id)
+    calls = 0
+
+    def fail_second_tap(args, serial, binary):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise android.AndroidError("second tap failed", "adb_failed")
+        return ""
+
+    cli_env.when("shell", "input", "tap", returns=fail_second_tap)
+    with pytest.raises(MobileSkillError) as excinfo:
+        _run(
+            "double-tap", "500", "500",
+            "--session", session_id, "--observation", observed["observation_id"],
+        )
+
+    assert calls == 2
+    assert excinfo.value.code == "action_result_unknown"
+    assert excinfo.value.details["action"]["action"] == "double-tap"
+
+
+def test_concurrent_session_command_is_rejected(cli_env, monkeypatch) -> None:
+    started = _run("session", "start")
+    session_id = started["session"]["id"]
+    observed = _run("observe", "--session", session_id)
+    entered = threading.Event()
+    release = threading.Event()
+    first_result: dict[str, object] = {}
+
+    def blocking_tap(serial, x, y, size, *, before_dispatch=None):
+        before_dispatch()
+        entered.set()
+        assert release.wait(timeout=2)
+
+    monkeypatch.setattr(android, "tap", blocking_tap)
+
+    def first_command():
+        try:
+            first_result["value"] = _run(
+                "tap", "500", "500",
+                "--session", session_id, "--observation", observed["observation_id"],
+            )
+        except Exception as error:
+            first_result["error"] = error
+
+    thread = threading.Thread(target=first_command)
+    thread.start()
+    assert entered.wait(timeout=2)
+    try:
+        with pytest.raises(MobileSkillError) as excinfo:
+            _run(
+                "tap", "500", "500",
+                "--session", session_id, "--observation", observed["observation_id"],
+            )
+        assert excinfo.value.code == "session_busy"
+    finally:
+        release.set()
+        thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert "error" not in first_result
+    assert first_result["value"]["ok"] is True
+
+
 def test_tap_with_observe_after(cli_env) -> None:
     started = _run("session", "start")
     session_id = started["session"]["id"]
@@ -113,6 +203,18 @@ def test_settle_without_observe_after_rejected(cli_env) -> None:
             "--session", session_id, "--observation", obs_id, "--settle-ms", "100",
         )
     assert excinfo.value.code == "settle_requires_observe_after"
+
+
+def test_pre_dispatch_error_preserves_observation(cli_env) -> None:
+    started = _run("session", "start")
+    session_id = started["session"]["id"]
+    observed = _run("observe", "--session", session_id)
+
+    with pytest.raises(MobileSkillError):
+        _run("press", "not-a-key", "--session", session_id)
+
+    current = state.get_session(session_id)["last_observation"]
+    assert current["id"] == observed["observation_id"]
 
 
 def test_type_empty_rejected(cli_env) -> None:

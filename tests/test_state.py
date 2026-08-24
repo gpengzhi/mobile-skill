@@ -33,6 +33,16 @@ def test_device_busy_rejects_second_lease(msk_home: Path) -> None:
     assert excinfo.value.code == "device_busy"
 
 
+def test_command_lock_rejects_concurrent_command(msk_home: Path) -> None:
+    with state.command_lock("abc123"):
+        with pytest.raises(MobileSkillError) as excinfo:
+            with state.command_lock("abc123"):
+                pass
+    assert excinfo.value.code == "session_busy"
+    with state.command_lock("abc123"):
+        pass
+
+
 def test_different_devices_ok(msk_home: Path) -> None:
     state.create_session("emu-A")
     state.create_session("emu-B")

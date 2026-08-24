@@ -8,6 +8,7 @@ import re
 import struct
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -75,6 +76,22 @@ def run_adb(*arguments: str, serial: str | None = None, binary: bool = False) ->
             f"adb {' '.join(arguments)} failed: {detail or 'unknown error'}", "adb_failed"
         )
     return result.stdout if binary else result.stdout.decode(errors="replace")
+
+
+def run_action_adb(
+    *arguments: str,
+    serial: str | None = None,
+    before_dispatch: Callable[[], None] | None = None,
+) -> str:
+    """Run a mutating ADB command and mark transport failures as uncertain."""
+    if before_dispatch is not None:
+        before_dispatch()
+    try:
+        return str(run_adb(*arguments, serial=serial))
+    except AndroidError as error:
+        if error.code != "adb_not_found":
+            error.details["action_may_have_applied"] = True
+        raise
 
 
 def shell_quote(value: str) -> str:
@@ -281,28 +298,74 @@ def validate_point(x: int, y: int, width: int, height: int) -> None:
         raise AndroidError(f"coordinate ({x}, {y}) is outside {width}x{height}")
 
 
-def tap(serial: str, x: int, y: int, size: tuple[int, int]) -> None:
+def tap(
+    serial: str,
+    x: int,
+    y: int,
+    size: tuple[int, int],
+    *,
+    before_dispatch: Callable[[], None] | None = None,
+) -> None:
     validate_point(x, y, *size)
-    run_adb("shell", "input", "tap", str(x), str(y), serial=serial)
+    run_action_adb(
+        "shell",
+        "input",
+        "tap",
+        str(x),
+        str(y),
+        serial=serial,
+        before_dispatch=before_dispatch,
+    )
 
 
 def double_tap(
-    serial: str, x: int, y: int, interval_ms: int, size: tuple[int, int]
+    serial: str,
+    x: int,
+    y: int,
+    interval_ms: int,
+    size: tuple[int, int],
+    *,
+    before_dispatch: Callable[[], None] | None = None,
 ) -> None:
     validate_point(x, y, *size)
     if interval_ms <= 0:
         raise AndroidError("interval must be positive")
-    run_adb("shell", "input", "tap", str(x), str(y), serial=serial)
+    run_action_adb(
+        "shell",
+        "input",
+        "tap",
+        str(x),
+        str(y),
+        serial=serial,
+        before_dispatch=before_dispatch,
+    )
     time.sleep(interval_ms / 1000)
-    run_adb("shell", "input", "tap", str(x), str(y), serial=serial)
+    run_action_adb("shell", "input", "tap", str(x), str(y), serial=serial)
 
 
-def long_press(serial: str, x: int, y: int, duration_ms: int, size: tuple[int, int]) -> None:
+def long_press(
+    serial: str,
+    x: int,
+    y: int,
+    duration_ms: int,
+    size: tuple[int, int],
+    *,
+    before_dispatch: Callable[[], None] | None = None,
+) -> None:
     validate_point(x, y, *size)
     if duration_ms <= 0:
         raise AndroidError("duration must be positive")
-    run_adb(
-        "shell", "input", "swipe", str(x), str(y), str(x), str(y), str(duration_ms), serial=serial
+    run_action_adb(
+        "shell",
+        "input",
+        "swipe",
+        str(x),
+        str(y),
+        str(x),
+        str(y),
+        str(duration_ms),
+        serial=serial,
+        before_dispatch=before_dispatch,
     )
 
 
@@ -314,12 +377,14 @@ def swipe(
     y2: int,
     duration_ms: int,
     size: tuple[int, int],
+    *,
+    before_dispatch: Callable[[], None] | None = None,
 ) -> None:
     validate_point(x1, y1, *size)
     validate_point(x2, y2, *size)
     if duration_ms <= 0:
         raise AndroidError("duration must be positive")
-    run_adb(
+    run_action_adb(
         "shell",
         "input",
         "swipe",
@@ -329,6 +394,7 @@ def swipe(
         str(y2),
         str(duration_ms),
         serial=serial,
+        before_dispatch=before_dispatch,
     )
 
 
@@ -340,7 +406,9 @@ def _ime_list(serial: str, *, include_all: bool) -> list[str]:
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
-def _type_unicode_with_adb_keyboard(serial: str, text: str) -> str:
+def _type_unicode_with_adb_keyboard(
+    serial: str, text: str, *, before_dispatch: Callable[[], None] | None = None
+) -> str:
     installed_imes = _ime_list(serial, include_all=True)
     if ADB_KEYBOARD_IME not in installed_imes:
         raise AndroidError(
@@ -357,12 +425,26 @@ def _type_unicode_with_adb_keyboard(serial: str, text: str) -> str:
     try:
         time.sleep(ADB_KEYBOARD_PRE_SWITCH_DELAY_S)
         if not was_enabled:
-            run_adb("shell", "ime", "enable", ADB_KEYBOARD_IME, serial=serial)
-        run_adb("shell", "ime", "set", ADB_KEYBOARD_IME, serial=serial)
+            run_action_adb(
+                "shell",
+                "ime",
+                "enable",
+                ADB_KEYBOARD_IME,
+                serial=serial,
+                before_dispatch=before_dispatch,
+            )
+        run_action_adb(
+            "shell",
+            "ime",
+            "set",
+            ADB_KEYBOARD_IME,
+            serial=serial,
+            before_dispatch=before_dispatch,
+        )
         time.sleep(ADB_KEYBOARD_POST_SWITCH_DELAY_S)
         encoded = base64.b64encode(text.encode("utf-8")).decode("ascii").rstrip("=")
         output = str(
-            run_adb(
+            run_action_adb(
                 "shell",
                 "am",
                 "broadcast",
@@ -372,6 +454,7 @@ def _type_unicode_with_adb_keyboard(serial: str, text: str) -> str:
                 "text",
                 encoded,
                 serial=serial,
+                before_dispatch=before_dispatch,
             )
         )
         if "result=-1" not in output:
@@ -379,40 +462,54 @@ def _type_unicode_with_adb_keyboard(serial: str, text: str) -> str:
                 "the ADBKeyboard broadcast was not delivered",
                 "unicode_input_failed",
                 "verify the helper IME is enabled and try again",
+                {"action_may_have_applied": True},
             )
     finally:
         if original_ime and original_ime != "null":
-            run_adb("shell", "ime", "set", original_ime, serial=serial)
+            run_action_adb("shell", "ime", "set", original_ime, serial=serial)
         if not was_enabled:
-            run_adb("shell", "ime", "disable", ADB_KEYBOARD_IME, serial=serial)
+            run_action_adb("shell", "ime", "disable", ADB_KEYBOARD_IME, serial=serial)
     # The broadcast reached ADBKeyboard's receiver; that does NOT prove the
     # focused input field received text (or that any field is focused at all).
     # The caller must re-observe and visually confirm the text landed.
     return "adb-keyboard-broadcast"
 
 
-def type_text(serial: str, text: str) -> str:
+def type_text(
+    serial: str, text: str, *, before_dispatch: Callable[[], None] | None = None
+) -> str:
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     if "\n" not in normalized:
-        return _type_segment(serial, normalized)
+        return _type_segment(serial, normalized, before_dispatch=before_dispatch)
     segments = normalized.split("\n")
     methods: list[str] = []
     for index, segment in enumerate(segments):
         if index > 0:
-            press(serial, "enter")
+            press(serial, "enter", before_dispatch=before_dispatch)
         if segment:
-            method = _type_segment(serial, segment)
+            method = _type_segment(serial, segment, before_dispatch=before_dispatch)
             if method not in methods:
                 methods.append(method)
     methods.append("enter")
     return "+".join(methods)
 
 
-def _type_segment(serial: str, text: str) -> str:
+def _type_segment(
+    serial: str, text: str, *, before_dispatch: Callable[[], None] | None = None
+) -> str:
     if _needs_ime(text):
-        return _type_unicode_with_adb_keyboard(serial, text)
+        return _type_unicode_with_adb_keyboard(
+            serial, text, before_dispatch=before_dispatch
+        )
     encoded = shell_quote(text.replace(" ", "%s"))
-    run_adb("shell", "input", "text", encoded, serial=serial)
+    run_action_adb(
+        "shell",
+        "input",
+        "text",
+        encoded,
+        serial=serial,
+        before_dispatch=before_dispatch,
+    )
     return "adb-input-text"
 
 
@@ -450,7 +547,9 @@ def input_capabilities(serial: str) -> dict[str, object]:
     }
 
 
-def press(serial: str, key: str) -> None:
+def press(
+    serial: str, key: str, *, before_dispatch: Callable[[], None] | None = None
+) -> None:
     normalized = key.lower()
     code = KEYS.get(normalized)
     if code is None and len(normalized) == 1 and normalized.isalnum():
@@ -458,25 +557,47 @@ def press(serial: str, key: str) -> None:
     if code is None:
         supported = ", ".join(sorted(KEYS))
         raise AndroidError(f"unsupported Android key {key!r}; supported keys: {supported}")
-    run_adb("shell", "input", "keyevent", f"KEYCODE_{code}", serial=serial)
+    run_action_adb(
+        "shell",
+        "input",
+        "keyevent",
+        f"KEYCODE_{code}",
+        serial=serial,
+        before_dispatch=before_dispatch,
+    )
 
 
-def home(serial: str) -> None:
-    press(serial, "home")
+def home(serial: str, *, before_dispatch: Callable[[], None] | None = None) -> None:
+    press(serial, "home", before_dispatch=before_dispatch)
 
 
-def back(serial: str) -> None:
-    press(serial, "back")
+def back(serial: str, *, before_dispatch: Callable[[], None] | None = None) -> None:
+    press(serial, "back", before_dispatch=before_dispatch)
 
 
-def app_switcher(serial: str) -> None:
-    press(serial, "recents")
+def app_switcher(
+    serial: str, *, before_dispatch: Callable[[], None] | None = None
+) -> None:
+    press(serial, "recents", before_dispatch=before_dispatch)
 
 
-def launch_app(serial: str, package: str) -> str:
+def launch_app(
+    serial: str,
+    package: str,
+    *,
+    before_dispatch: Callable[[], None] | None = None,
+) -> str:
     require_installed_app(serial, package)
     component = _resolve_launcher_component(serial, package)
-    run_adb("shell", "am", "start", "-n", shell_quote(component), serial=serial)
+    run_action_adb(
+        "shell",
+        "am",
+        "start",
+        "-n",
+        shell_quote(component),
+        serial=serial,
+        before_dispatch=before_dispatch,
+    )
     return package
 
 

@@ -129,6 +129,25 @@ def _locked():
         yield
 
 
+@contextmanager
+def command_lock(session_id: str):
+    """Reject concurrent device commands for the same Session."""
+    if Path(session_id).name != session_id or session_id in {"", ".", ".."}:
+        raise MobileSkillError("invalid_session_id", f"invalid session id: {session_id!r}")
+    path = screenshots_dir(session_id) / ".command.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise MobileSkillError(
+                "session_busy",
+                f"session {session_id} is already executing a command",
+                "wait for that command to finish, then observe before acting",
+            ) from error
+        yield
+
+
 def _parse_timestamp(value: Any, *, session_id: str) -> datetime:
     if not isinstance(value, str):
         raise MobileSkillError(

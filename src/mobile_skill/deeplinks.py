@@ -32,6 +32,7 @@ import os
 import re
 import tempfile
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -378,7 +379,12 @@ def is_sensitive_url(url: str) -> bool:
     return any(keyword in lowered for keyword in SENSITIVE_KEYWORDS)
 
 
-def open_url(serial: str, url: str) -> dict[str, Any]:
+def open_url(
+    serial: str,
+    url: str,
+    *,
+    before_dispatch: Callable[[], None] | None = None,
+) -> dict[str, Any]:
     """Invoke a deep link. Raises on sensitive-URL block or unresolvable URL."""
     if not url or url.strip() != url:
         raise MobileSkillError("invalid_url", "URL must be a non-empty trimmed string")
@@ -395,7 +401,7 @@ def open_url(serial: str, url: str) -> dict[str, Any]:
             f"no activity handles this URL on the device: {url}",
             "verify the app's declared schemes with `msk app schemes <package>`",
         )
-    android.run_adb(
+    android.run_action_adb(
         "shell",
         "am",
         "start",
@@ -404,6 +410,7 @@ def open_url(serial: str, url: str) -> dict[str, Any]:
         "-d",
         android.shell_quote(url),
         serial=serial,
+        before_dispatch=before_dispatch,
     )
     return {"url": url, "resolved_activity": resolved}
 

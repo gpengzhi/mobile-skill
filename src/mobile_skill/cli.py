@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -270,6 +271,44 @@ def _invalidate_observation(session_id: str) -> None:
     state.update_session(session_id, last_observation=None)
 
 
+def _raise_action_error(error: MobileSkillError, action: dict[str, Any]) -> None:
+    if not error.details.get("action_may_have_applied"):
+        raise error
+    raise MobileSkillError(
+        "action_result_unknown",
+        "the device command failed after dispatch; the action may have applied",
+        "observe the screen before taking another action; do not retry blindly",
+        {
+            "action_may_have_applied": True,
+            "action": action,
+            "cause": error.code,
+        },
+    ) from error
+
+
+def _execute_device_action(
+    session_id: str,
+    action: dict[str, Any],
+    execute: Callable[[Callable[[], None]], Any],
+) -> Any:
+    observation_invalidated = False
+
+    def before_dispatch() -> None:
+        nonlocal observation_invalidated
+        if observation_invalidated:
+            return
+        _invalidate_observation(session_id)
+        observation_invalidated = True
+
+    try:
+        outcome = execute(before_dispatch)
+    except MobileSkillError as error:
+        _raise_action_error(error, action)
+    if not observation_invalidated:
+        _invalidate_observation(session_id)
+    return outcome
+
+
 def _settle_request(args: argparse.Namespace) -> tuple[int, str] | None:
     observe_after = getattr(args, "observe_after", False)
     settle_ms = getattr(args, "settle_ms", None)
@@ -314,7 +353,6 @@ def _complete_action(
     if observation_id is not None:
         result["observation_id"] = observation_id
 
-    _invalidate_observation(session["id"])
     if request is None:
         return result
 
@@ -347,7 +385,8 @@ def _complete_action(
 
 
 def _request_help(args: argparse.Namespace) -> dict[str, Any]:
-    session = state.request_help(args.session, args.reason, args.message)
+    with state.command_lock(args.session):
+        session = state.request_help(args.session, args.reason, args.message)
     return _ok(
         session_id=session["id"],
         device_id=session["device_id"],
@@ -358,7 +397,8 @@ def _request_help(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _observe(args: argparse.Namespace) -> dict[str, Any]:
-    return observations.capture(args.session, full=args.full, model_width=args.model_width)
+    with state.command_lock(args.session):
+        return observations.capture(args.session, full=args.full, model_width=args.model_width)
 
 
 def _device_size(observation: dict[str, Any]) -> tuple[int, int]:
@@ -385,35 +425,47 @@ def _device_point(observation: dict[str, Any], x: int, y: int) -> tuple[int, int
 
 def _run_action(args: argparse.Namespace) -> dict[str, Any]:
     request = _settle_request(args)
+    with state.command_lock(args.session):
+        return _run_action_locked(args, request)
+
+
+def _run_action_locked(
+    args: argparse.Namespace, request: tuple[int, str] | None
+) -> dict[str, Any]:
     session, serial = _driver(args)
     observation = _check_observation(session, args.observation)
     size = _device_size(observation)
     if args.command == "tap":
         x, y = _device_point(observation, args.x, args.y)
-        android.tap(serial, x, y, size)
         action = {"action": "tap", "x": args.x, "y": args.y}
+        execute = lambda before: android.tap(
+            serial, x, y, size, before_dispatch=before
+        )
     elif args.command == "double-tap":
         x, y = _device_point(observation, args.x, args.y)
-        android.double_tap(serial, x, y, args.interval_ms, size)
         action = {
             "action": "double-tap",
             "x": args.x,
             "y": args.y,
             "interval_ms": args.interval_ms,
         }
+        execute = lambda before: android.double_tap(
+            serial, x, y, args.interval_ms, size, before_dispatch=before
+        )
     elif args.command == "long-press":
         x, y = _device_point(observation, args.x, args.y)
-        android.long_press(serial, x, y, args.duration_ms, size)
         action = {
             "action": "long-press",
             "x": args.x,
             "y": args.y,
             "duration_ms": args.duration_ms,
         }
+        execute = lambda before: android.long_press(
+            serial, x, y, args.duration_ms, size, before_dispatch=before
+        )
     else:
         x1, y1 = _device_point(observation, args.x1, args.y1)
         x2, y2 = _device_point(observation, args.x2, args.y2)
-        android.swipe(serial, x1, y1, x2, y2, args.duration_ms, size)
         action = {
             "action": "swipe",
             "x1": args.x1,
@@ -422,6 +474,11 @@ def _run_action(args: argparse.Namespace) -> dict[str, Any]:
             "y2": args.y2,
             "duration_ms": args.duration_ms,
         }
+        execute = lambda before: android.swipe(
+            serial, x1, y1, x2, y2, args.duration_ms, size,
+            before_dispatch=before,
+        )
+    _execute_device_action(session["id"], action, execute)
     return _complete_action(
         session,
         serial,
@@ -439,33 +496,61 @@ def _simple_action(args: argparse.Namespace) -> dict[str, Any]:
             "pass a non-empty string, or skip the call",
         )
     request = _settle_request(args)
+    with state.command_lock(args.session):
+        return _simple_action_locked(args, request)
+
+
+def _simple_action_locked(
+    args: argparse.Namespace, request: tuple[int, str] | None
+) -> dict[str, Any]:
     session, serial = _driver(args, require_unlocked=args.command != "wait")
     if args.command == "wait":
         android.wait(args.duration_ms)
         action = {"action": "wait", "duration_ms": args.duration_ms}
-    elif args.command == "type":
-        method = android.type_text(serial, args.text)
-        action = {"action": "type", "text_length": len(args.text), "method": method}
+        _invalidate_observation(session["id"])
+        return _complete_action(session, serial, action, request=request)
+    if args.command == "type":
+        action = {"action": "type", "text_length": len(args.text)}
+        execute = lambda before: android.type_text(
+            serial, args.text, before_dispatch=before
+        )
     elif args.command == "press":
-        android.press(serial, args.key)
         action = {"action": "press", "key": args.key}
+        execute = lambda before: android.press(
+            serial, args.key, before_dispatch=before
+        )
     elif args.command == "home":
-        android.home(serial)
         action = {"action": "home"}
+        execute = lambda before: android.home(serial, before_dispatch=before)
     elif args.command == "back":
-        android.back(serial)
         action = {"action": "back"}
+        execute = lambda before: android.back(serial, before_dispatch=before)
     elif args.command == "app-switcher":
-        android.app_switcher(serial)
         action = {"action": "app-switcher"}
+        execute = lambda before: android.app_switcher(
+            serial, before_dispatch=before
+        )
     elif args.command == "app" and args.app_command == "open":
-        package = android.launch_app(serial, args.package)
-        action = {"action": "app-open", "package": package}
+        action = {"action": "app-open", "package": args.package}
+        execute = lambda before: android.launch_app(
+            serial, args.package, before_dispatch=before
+        )
     elif args.command == "app" and args.app_command == "open-url":
-        result = deeplinks.open_url(serial, args.url)
-        action = {"action": "app-open-url", **result}
+        action = {"action": "app-open-url"}
+        execute = lambda before: deeplinks.open_url(
+            serial, args.url, before_dispatch=before
+        )
     else:
         raise MobileSkillError("unknown_command", f"unknown action: {args.command}")
+
+    outcome = _execute_device_action(session["id"], action, execute)
+
+    if args.command == "type":
+        action["method"] = outcome
+    elif args.command == "app" and args.app_command == "open":
+        action["package"] = outcome
+    elif args.command == "app" and args.app_command == "open-url":
+        action.update(outcome)
     return _complete_action(session, serial, action, request=request)
 
 
