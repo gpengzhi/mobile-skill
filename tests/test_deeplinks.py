@@ -310,6 +310,65 @@ check(
 )
 
 
+# --- forget / reset_learned (uses MOBILE_SKILL_HOME isolation) ---
+
+import os
+import tempfile
+import importlib
+
+
+with tempfile.TemporaryDirectory() as tmp_home:
+    os.environ["MOBILE_SKILL_HOME"] = tmp_home
+    # Reload deeplinks to pick up the new home
+    import mobile_skill.deeplinks as dl  # noqa: E402
+    importlib.reload(dl)
+
+    # Seed a fake learned file
+    Path(tmp_home).mkdir(parents=True, exist_ok=True)
+    seed = {
+        "version": 1,
+        "apps": {
+            "tv.danmaku.bili": {
+                "entries": [
+                    {"url": "bilibili://search?keyword={keyword}", "invocations": 3, "verified": 3},
+                    {"url": "bilibili://space/{mid}", "invocations": 1, "verified": 1},
+                ],
+            },
+            "com.other.app": {
+                "entries": [{"url": "other://feed", "invocations": 5, "verified": 5}],
+            },
+        },
+    }
+    dl._write_learned(seed)
+
+    # forget a specific URL
+    r = dl.forget_learned_url("bilibili://space/{mid}")
+    check(_assert_eq(len(r["forgotten"]), 1, "forget removes one entry"), "forget_one")
+    after = dl.load_learned_registry()
+    check(
+        _assert_eq(
+            len(after["apps"]["tv.danmaku.bili"]["entries"]), 1, "bilibili has 1 entry left"
+        ),
+        "forget_leaves_one",
+    )
+
+    # forget nonexistent URL
+    r = dl.forget_learned_url("does-not-exist://foo")
+    check(_assert_eq(r["forgotten"], [], "forget missing URL is no-op"), "forget_missing")
+
+    # reset wipes everything
+    r = dl.reset_learned()
+    check(_assert_eq(r["cleared_apps"], 2, "reset reports 2 apps cleared"), "reset_cleared_apps")
+    after = dl.load_learned_registry()
+    check(_assert_eq(after, {"version": 1, "apps": {}}, "learned empty after reset"), "reset_wipes")
+
+    # forget on empty file is safe
+    r = dl.forget_learned_url("anything://foo")
+    check(_assert_eq(r["forgotten"], [], "forget on empty is no-op"), "forget_on_empty")
+
+    del os.environ["MOBILE_SKILL_HOME"]
+
+
 print()
 print(f"{passed} passed, {failed} failed")
 sys.exit(0 if failed == 0 else 1)

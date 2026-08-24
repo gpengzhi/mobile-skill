@@ -155,6 +155,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     registry = app_commands.add_parser("registry")
     registry.add_argument("package", nargs="?")
+    registry.add_argument(
+        "--forget",
+        metavar="URL",
+        help="remove a specific learned URL template from the learned registry",
+    )
+    registry.add_argument(
+        "--reset-learned",
+        action="store_true",
+        dest="reset_learned",
+        help="wipe all learned entries (curated registry is untouched)",
+    )
 
     apps = commands.add_parser("apps")
     apps_commands = apps.add_subparsers(dest="apps_command", required=True)
@@ -519,6 +530,17 @@ def _dispatch(args: argparse.Namespace) -> Any:
         serial = android.require_device(args.device)
         return _ok(**deeplinks.parse_schemes(serial, args.package))
     if args.command == "app" and args.app_command == "registry":
+        forget = getattr(args, "forget", None)
+        reset_learned = getattr(args, "reset_learned", False)
+        if forget and reset_learned:
+            raise MobileSkillError(
+                "conflicting_flags",
+                "--forget and --reset-learned are mutually exclusive",
+            )
+        if reset_learned:
+            return _ok(**deeplinks.reset_learned())
+        if forget:
+            return _ok(**deeplinks.forget_learned_url(forget, package=args.package))
         return _ok(apps=deeplinks.merged_registry(args.package))
     if args.command == "observe":
         return _observe(args)

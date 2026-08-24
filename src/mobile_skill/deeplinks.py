@@ -560,3 +560,52 @@ def finalize_open_url(
         "template": template,
         "recorded": True,
     }
+
+
+# ---------------------------------------------------------------------------
+# Learned registry mutations (Phase 2 UX)
+# ---------------------------------------------------------------------------
+
+
+def forget_learned_url(url: str, package: str | None = None) -> dict[str, Any]:
+    """Remove a specific learned entry by exact URL match.
+
+    If `package` is given, restrict the search to that app; otherwise scan
+    every app in the learned file. Curated entries are never touched.
+    Returns which package(s)/URL(s) were removed.
+    """
+    if not url or url.strip() != url:
+        raise MobileSkillError("invalid_url", "URL must be a non-empty trimmed string")
+    with _learned_locked():
+        data = load_learned_registry()
+        apps = data.get("apps", {})
+        forgotten: list[dict[str, str]] = []
+        empty_pkgs: list[str] = []
+        packages = [package] if package is not None else list(apps)
+        for pkg in packages:
+            spec = apps.get(pkg)
+            if not spec:
+                continue
+            before = spec.get("entries", [])
+            after = [entry for entry in before if entry.get("url") != url]
+            if len(after) != len(before):
+                forgotten.append({"package": pkg, "url": url})
+                spec["entries"] = after
+            if not spec.get("entries"):
+                empty_pkgs.append(pkg)
+        for pkg in empty_pkgs:
+            del apps[pkg]
+        if forgotten:
+            _write_learned(data)
+        return {"forgotten": forgotten}
+
+
+def reset_learned() -> dict[str, Any]:
+    """Wipe the entire learned registry. Curated is untouched."""
+    with _learned_locked():
+        data = load_learned_registry()
+        apps = data.get("apps", {})
+        cleared_apps = len(apps)
+        cleared_entries = sum(len(spec.get("entries", [])) for spec in apps.values())
+        _write_learned({"version": 1, "apps": {}})
+        return {"cleared_apps": cleared_apps, "cleared_entries": cleared_entries}

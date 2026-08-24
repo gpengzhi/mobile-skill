@@ -128,6 +128,14 @@ Learned entries are stored as **structural templates** (e.g. `bilibili://space/{
 
 **Caveat**: A learned template may over-generalize a query value that is actually a fixed constant. Some apps use IDs like `appId=10000007` as feature codes, not user-supplied values — filling a different number into that position returns `deeplink_unresolvable`. If a learned template fails on your first fill, treat it as unreliable for that variable and fall back to GUI or curated.
 
+To remove a bad learned entry:
+
+```bash
+msk --json app registry --forget "<exact url template>"    # scoped to any package
+msk --json app registry <package> --forget "<url template>"  # scoped to one package
+msk --json app registry --reset-learned                     # wipe everything (curated untouched)
+```
+
 ## Human Takeover
 
 Pause for passwords, OTPs, PINs, biometrics, payments, private information, or permission decisions:
