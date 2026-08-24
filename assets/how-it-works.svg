@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 310" role="img" aria-labelledby="title description">
+  <title id="title">How mobile-skill works</title>
+  <desc id="description">The agent observes and verifies the phone, checks whether the goal is complete, then chooses a reusable deep link, a trusted new deep link, or one atomic GUI action. Every action returns to observation and verification.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0L8 4L0 8Z" fill="#6e7781"/>
+    </marker>
+    <style>
+      .line { fill: none; stroke: #6e7781; stroke-width: 2; marker-end: url(#arrow); }
+      .merge { fill: none; stroke: #6e7781; stroke-width: 2; }
+      .label { fill: #1f2328; font: 600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-anchor: middle; }
+      .detail { fill: #57606a; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-anchor: middle; }
+      .edge-label { fill: #57606a; font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <path class="line" d="M200 142H254"/>
+  <path class="line" d="M386 142H444"/>
+  <path class="line" d="M320 92V54H454"/>
+  <path class="line" d="M596 142C638 142 651 57 699 57"/>
+  <path class="line" d="M596 142H699"/>
+  <path class="line" d="M596 142C638 142 651 227 699 227"/>
+
+  <path class="merge" d="M925 57C965 57 959 142 986 142"/>
+  <path class="merge" d="M925 142H986"/>
+  <path class="merge" d="M925 227C965 227 959 142 986 142"/>
+  <circle cx="990" cy="142" r="4" fill="#6e7781"/>
+  <path class="line" d="M990 146V282H110V172"/>
+
+  <rect x="20" y="112" width="180" height="60" rx="30" fill="#ddf4ff" stroke="#0969da" stroke-width="2"/>
+  <text class="label" x="110" y="147">Observe and verify</text>
+
+  <path d="M320 92L386 142L320 192L254 142Z" fill="#fff8c5" stroke="#9a6700" stroke-width="2"/>
+  <text class="label" x="320" y="138">Goal</text>
+  <text class="label" x="320" y="158">complete?</text>
+
+  <rect x="454" y="30" width="132" height="48" rx="24" fill="#dafbe1" stroke="#1a7f37" stroke-width="2"/>
+  <text class="label" x="520" y="59">Finish</text>
+
+  <path d="M520 92L596 142L520 192L444 142Z" fill="#fff8c5" stroke="#9a6700" stroke-width="2"/>
+  <text class="label" x="520" y="138">Choose</text>
+  <text class="label" x="520" y="158">next action</text>
+
+  <rect x="699" y="25" width="226" height="64" rx="12" fill="#fbefff" stroke="#8250df" stroke-width="2"/>
+  <text class="label" x="812" y="52">Reusable deep link</text>
+  <text class="detail" x="812" y="73">Open and record outcome</text>
+
+  <rect x="699" y="110" width="226" height="64" rx="12" fill="#fbefff" stroke="#8250df" stroke-width="2"/>
+  <text class="label" x="812" y="137">Trusted new deep link</text>
+  <text class="detail" x="812" y="158">Try once and learn pattern</text>
+
+  <rect x="699" y="195" width="226" height="64" rx="12" fill="#f6f8fa" stroke="#57606a" stroke-width="2"/>
+  <text class="label" x="812" y="222">Atomic GUI action</text>
+  <text class="detail" x="812" y="243">Tap, swipe, type, or navigate</text>
+
+  <text class="edge-label" x="347" y="45">Yes</text>
+  <text class="edge-label" x="415" y="133">No</text>
+  <text class="edge-label" x="550" y="278">Observe the result and repeat</text>
+</svg>

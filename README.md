@@ -51,16 +51,9 @@ The request authorizes only the stated actions. Sending, posting, purchasing, de
 
 ## How It Works
 
-```mermaid
-flowchart LR
-    O([Observe and verify]) --> Q{Goal complete?}
-    Q -- Yes --> X([Finish])
-    Q -- No --> A{Choose action}
-    A -- Reusable deep link --> D[Open and record]
-    A -- Trusted new deep link --> N[Try once and record]
-    A -- GUI --> G[Atomic action]
-    D & N & G --> O
-```
+<p align="center">
+  <img src="assets/how-it-works.svg" alt="mobile-skill observes and verifies the phone, chooses one of three actions, then observes the result and repeats" width="900">
+</p>
 
 The core loop is deliberately atomic:
 
