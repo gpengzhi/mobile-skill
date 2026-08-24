@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Curated deep-link templates. Best-effort; app owners may change these without notice. Verify against the target device with `msk app schemes <package>` and observe the landing screen after invocation.",
+  "note": "Curated deep-link templates. Best-effort; app owners may change these without notice. Every entry here has been verified on a real device — see the SKILL.md `Deep Links` section for how the agent should use them. Verify against the target device with `msk app schemes <package>` and observe the landing screen after invocation.",
   "apps": {
     "tv.danmaku.bili": {
       "display_name": "Bilibili",
@@ -18,16 +18,34 @@
           "description": "Open a video by its BV id (e.g. BV1xx411c7mu)"
         },
         {
+          "name": "article",
+          "url": "bilibili://article/{cvid}",
+          "params": ["cvid"],
+          "description": "Open a column article by its numeric cv id"
+        },
+        {
           "name": "user_space",
           "url": "bilibili://space/{mid}",
           "params": ["mid"],
           "description": "Open a user's profile by numeric mid"
         },
         {
+          "name": "user_center",
+          "url": "bilibili://user_center",
+          "params": [],
+          "description": "Open the current user's profile hub. Routes to MainActivityV2 with the profile tab active."
+        },
+        {
+          "name": "following_feed",
+          "url": "bilibili://following",
+          "params": [],
+          "description": "Open the feed of accounts you follow. Routes to MainActivityV2."
+        },
+        {
           "name": "live_room",
           "url": "bilibili://live/{room_id}",
           "params": ["room_id"],
-          "description": "Open a live-streaming room"
+          "description": "Open a live-streaming room by numeric room id"
         }
       ]
     },
@@ -44,7 +62,7 @@
           "name": "item",
           "url": "taobao://item.taobao.com/item.htm?id={id}",
           "params": ["id"],
-          "description": "Open a product listing by numeric item id"
+          "description": "Open a product listing by numeric item id. May land on the login screen if the account is signed out."
         }
       ]
     },
@@ -66,7 +84,7 @@
           "name": "scan",
           "url": "alipays://platformapi/startapp?appId=10000007",
           "params": [],
-          "description": "Open the Alipay scan (paying and card scan share this entry)"
+          "description": "Open the Alipay scanner. First launch may trigger a camera permission prompt from the system, which shows up as a hijacked landing."
         }
       ]
     },
@@ -80,10 +98,102 @@
           "description": "Search points of interest. `source` is a free-form app label (e.g. `mobile-skill`)."
         },
         {
+          "name": "view_map",
+          "url": "androidamap://viewMap?lat={lat}&lon={lon}&dev={dev}",
+          "params": ["lat", "lon", "dev"],
+          "description": "Center the map on lat/lon. `dev=0` for WGS-84 coordinates, `dev=1` for GCJ-02 (Amap's mars-coordinates)."
+        },
+        {
           "name": "route",
           "url": "androidamap://route?sourceApplication={source}&slat={slat}&slon={slon}&dlat={dlat}&dlon={dlon}&t=0",
           "params": ["source", "slat", "slon", "dlat", "dlon"],
           "description": "Route from start (slat, slon) to destination (dlat, dlon). `t=0` = driving."
+        }
+      ]
+    },
+    "com.sina.weibo": {
+      "display_name": "Weibo",
+      "entries": [
+        {
+          "name": "search",
+          "url": "sinaweibo://searchall?q={q}",
+          "params": ["q"],
+          "description": "Search across all Weibo content"
+        }
+      ]
+    },
+    "com.zhihu.android": {
+      "display_name": "Zhihu",
+      "entries": [
+        {
+          "name": "search",
+          "url": "zhihu://search?q={q}&type={type}",
+          "params": ["q", "type"],
+          "description": "Search Zhihu. `type` is one of content | question | user | topic | column."
+        },
+        {
+          "name": "feed",
+          "url": "zhihu://feed",
+          "params": [],
+          "description": "Open the home feed"
+        },
+        {
+          "name": "question",
+          "url": "zhihu://question/{id}",
+          "params": ["id"],
+          "description": "Open a question detail page by numeric question id"
+        },
+        {
+          "name": "user",
+          "url": "zhihu://people/{user_hash}",
+          "params": ["user_hash"],
+          "description": "Open a user's profile by their hash id (the suffix in their profile URL, e.g. zhihu.com/people/{user_hash})"
+        }
+      ]
+    },
+    "com.smile.gifmaker": {
+      "display_name": "Kuaishou",
+      "entries": [
+        {
+          "name": "home",
+          "url": "kwai://home",
+          "params": [],
+          "description": "Open the Kuaishou home screen"
+        },
+        {
+          "name": "search",
+          "url": "kwai://search?keyword={keyword}",
+          "params": ["keyword"],
+          "description": "Search Kuaishou videos by keyword"
+        },
+        {
+          "name": "user_profile",
+          "url": "kwai://profile/{user_id}",
+          "params": ["user_id"],
+          "description": "Open a user's profile by their numeric id"
+        }
+      ]
+    },
+    "com.taobao.idlefish": {
+      "display_name": "Xianyu",
+      "entries": [
+        {
+          "name": "home",
+          "url": "fleamarket://home",
+          "params": [],
+          "description": "Open the Xianyu (Idle Fish) home screen"
+        },
+        {
+          "name": "search",
+          "url": "fleamarket://search?keyword={keyword}",
+          "params": ["keyword"],
+          "description": "Search Xianyu listings by keyword"
+        },
+        {
+          "name": "item",
+          "url": "fleamarket://item?id={id}",
+          "params": ["id"],
+          "description": "Open a listing detail page by numeric item id"
         }
       ]
     }

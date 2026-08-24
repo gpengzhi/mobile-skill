@@ -288,7 +288,7 @@ def merged_registry(package: str | None = None) -> list[dict[str, Any]]:
         learned_entries = learned_spec.get("entries", [])
 
         merged_entries: list[dict[str, Any]] = []
-        curated_urls: set[str] = set()
+        curated_shapes: set[str] = set()
 
         for entry in curated_entries:
             out = {"source": "curated", **entry}
@@ -297,12 +297,12 @@ def merged_registry(package: str | None = None) -> list[dict[str, Any]]:
                 for field in _COUNTER_FIELDS:
                     if field in stats:
                         out[field] = stats[field]
-            curated_urls.add(entry.get("url", ""))
+            curated_shapes.add(_canonical_shape(entry.get("url", "")))
             merged_entries.append(out)
 
         for entry in learned_entries:
-            if entry.get("url") in curated_urls:
-                continue  # already overlaid onto curated
+            if _canonical_shape(entry.get("url", "")) in curated_shapes:
+                continue  # shape-equivalent to a curated entry, already overlaid
             merged_entries.append({"source": "learned", **entry})
 
         result.append(
