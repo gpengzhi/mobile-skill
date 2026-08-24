@@ -198,11 +198,3 @@ def registered_harnesses() -> list[dict[str, Any]]:
             }
         )
     return entries
-
-
-def install_codex() -> dict[str, Any]:
-    return install("codex")
-
-
-def install_claude_code() -> dict[str, Any]:
-    return install("claude-code")
