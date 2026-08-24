@@ -434,6 +434,12 @@ def _run_action(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _simple_action(args: argparse.Namespace) -> dict[str, Any]:
+    if args.command == "type" and not args.text:
+        raise MobileSkillError(
+            "empty_text",
+            "type text must not be empty",
+            "pass a non-empty string, or skip the call",
+        )
     request = _settle_request(args)
     session, serial = _driver(args, require_unlocked=args.command != "wait")
     if args.command == "wait":
@@ -526,9 +532,17 @@ def _dispatch(args: argparse.Namespace) -> Any:
     return _simple_action(args)
 
 
+def _hoist_json_flag(argv: list[str]) -> list[str]:
+    """Move any --json occurrence to the front so subcommands accept it too."""
+    if "--json" not in argv:
+        return argv
+    remainder = [token for token in argv if token != "--json"]
+    return ["--json", *remainder]
+
+
 def main() -> None:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(_hoist_json_flag(sys.argv[1:]))
     try:
         _emit(_dispatch(args), args.json)
     except MobileSkillError as error:

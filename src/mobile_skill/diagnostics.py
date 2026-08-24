@@ -174,7 +174,11 @@ def doctor(agent: str | None = None, serial: str | None = None) -> dict[str, Any
     if agent:
         agent_checks = _agent_checks(agent)
         checks[agent] = agent_checks
-        if any(
+        harness_unknown = (
+            len(agent_checks) == 1
+            and agent_checks.get("harness", {}).get("status") == "unknown"
+        )
+        if not harness_unknown and any(
             item["status"] not in {"ready", "unverified"}
             for item in agent_checks.values()
         ):
