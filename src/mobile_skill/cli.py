@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -34,37 +33,6 @@ DEFAULT_SETTLE_MS = {
 }
 MAX_SETTLE_MS = 60_000
 NORMALIZED_COORDINATE_MAX = observations.NORMALIZED_COORDINATE_MAX
-UNLOCK_TTL_S_DEFAULT = 30.0
-
-
-def _unlock_ttl_s() -> float:
-    configured = os.environ.get("MOBILE_SKILL_UNLOCK_TTL_S")
-    if configured is None:
-        return UNLOCK_TTL_S_DEFAULT
-    try:
-        value = float(configured)
-    except ValueError as error:
-        raise MobileSkillError(
-            "invalid_unlock_ttl",
-            "MOBILE_SKILL_UNLOCK_TTL_S must be a non-negative number",
-        ) from error
-    if value < 0:
-        raise MobileSkillError(
-            "invalid_unlock_ttl",
-            "MOBILE_SKILL_UNLOCK_TTL_S must be a non-negative number",
-        )
-    return value
-
-
-def _ensure_unlocked_cached(session: dict[str, Any], serial: str) -> None:
-    verified_at = session.get("unlock_verified_at")
-    ttl = _unlock_ttl_s()
-    now = time.time()
-    if verified_at is not None and now - verified_at < ttl:
-        return
-    android.ensure_unlocked(serial)
-    state.update_session(session["id"], unlock_verified_at=now)
-    session["unlock_verified_at"] = now
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -252,7 +220,7 @@ def _driver(
     session = _active_session(args)
     serial = android.require_device(session["device_id"])
     if require_unlocked:
-        _ensure_unlocked_cached(session, serial)
+        observations.ensure_session_unlocked(session, serial)
     state.update_session(session["id"], last_activity_at=time.time())
     return session, serial
 
