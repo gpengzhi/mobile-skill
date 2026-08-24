@@ -77,9 +77,12 @@ def run_adb(*arguments: str, serial: str | None = None, binary: bool = False) ->
     return result.stdout if binary else result.stdout.decode(errors="replace")
 
 
-def _shell_quote(value: str) -> str:
+def shell_quote(value: str) -> str:
     """Quote a value for the device shell that interprets `adb shell` commands."""
     return "'" + value.replace("'", "'\\''") + "'"
+
+
+_shell_quote = shell_quote  # legacy internal alias
 
 
 def list_devices() -> list[dict[str, str]]:

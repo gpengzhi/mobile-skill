@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import android, diagnostics, installer, observations, onboard, state
+from . import android, deeplinks, diagnostics, installer, observations, onboard, state
 from . import __version__
 from .errors import MobileSkillError
 
@@ -143,6 +143,18 @@ def build_parser() -> argparse.ArgumentParser:
     open_app.add_argument("package")
     _add_session_option(open_app)
     _add_post_action_options(open_app)
+
+    open_url = app_commands.add_parser("open-url")
+    open_url.add_argument("url")
+    _add_session_option(open_url)
+    _add_post_action_options(open_url)
+
+    schemes = app_commands.add_parser("schemes")
+    schemes.add_argument("package")
+    schemes.add_argument("--device")
+
+    registry = app_commands.add_parser("registry")
+    registry.add_argument("package", nargs="?")
 
     apps = commands.add_parser("apps")
     apps_commands = apps.add_subparsers(dest="apps_command", required=True)
@@ -428,9 +440,12 @@ def _simple_action(args: argparse.Namespace) -> dict[str, Any]:
     elif args.command == "app-switcher":
         android.app_switcher(serial)
         action = {"action": "app-switcher"}
-    elif args.command == "app":
+    elif args.command == "app" and args.app_command == "open":
         package = android.launch_app(serial, args.package)
         action = {"action": "app-open", "package": package}
+    elif args.command == "app" and args.app_command == "open-url":
+        result = deeplinks.open_url(serial, args.url)
+        action = {"action": "app-open-url", **result}
     else:
         raise MobileSkillError("unknown_command", f"unknown action: {args.command}")
     return _complete_action(session, serial, action, request=request)
@@ -493,6 +508,11 @@ def _dispatch(args: argparse.Namespace) -> Any:
                 user_visible=args.user_visible,
                 apps=android.list_packages(serial, user_visible=args.user_visible),
             )
+    if args.command == "app" and args.app_command == "schemes":
+        serial = android.require_device(args.device)
+        return _ok(**deeplinks.parse_schemes(serial, args.package))
+    if args.command == "app" and args.app_command == "registry":
+        return _ok(apps=deeplinks.merged_registry(args.package))
     if args.command == "observe":
         return _observe(args)
     if args.command in ("tap", "double-tap", "long-press", "swipe"):

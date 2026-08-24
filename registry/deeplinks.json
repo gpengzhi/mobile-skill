@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "note": "Curated deep-link templates. Best-effort; app owners may change these without notice. Verify against the target device with `msk app schemes <package>` and observe the landing screen after invocation.",
+  "apps": {
+    "tv.danmaku.bili": {
+      "display_name": "Bilibili",
+      "entries": [
+        {
+          "name": "search",
+          "url": "bilibili://search?keyword={keyword}",
+          "params": ["keyword"],
+          "description": "Search videos by keyword"
+        },
+        {
+          "name": "video",
+          "url": "bilibili://video/{bvid}",
+          "params": ["bvid"],
+          "description": "Open a video by its BV id (e.g. BV1xx411c7mu)"
+        },
+        {
+          "name": "user_space",
+          "url": "bilibili://space/{mid}",
+          "params": ["mid"],
+          "description": "Open a user's profile by numeric mid"
+        },
+        {
+          "name": "live_room",
+          "url": "bilibili://live/{room_id}",
+          "params": ["room_id"],
+          "description": "Open a live-streaming room"
+        }
+      ]
+    },
+    "com.taobao.taobao": {
+      "display_name": "Taobao",
+      "entries": [
+        {
+          "name": "search",
+          "url": "taobao://s.taobao.com/search?q={q}",
+          "params": ["q"],
+          "description": "Search Taobao by keyword"
+        },
+        {
+          "name": "item",
+          "url": "taobao://item.taobao.com/item.htm?id={id}",
+          "params": ["id"],
+          "description": "Open a product listing by numeric item id"
+        }
+      ]
+    },
+    "com.tencent.mm": {
+      "display_name": "WeChat",
+      "entries": [
+        {
+          "name": "scan_qr",
+          "url": "weixin://scanqrcode",
+          "params": [],
+          "description": "Open the WeChat QR code scanner"
+        }
+      ]
+    },
+    "com.eg.android.AlipayGphone": {
+      "display_name": "Alipay",
+      "entries": [
+        {
+          "name": "scan",
+          "url": "alipays://platformapi/startapp?appId=10000007",
+          "params": [],
+          "description": "Open the Alipay scan (paying and card scan share this entry)"
+        }
+      ]
+    },
+    "com.autonavi.minimap": {
+      "display_name": "Amap",
+      "entries": [
+        {
+          "name": "search_poi",
+          "url": "androidamap://poi?sourceApplication={source}&keywords={keywords}",
+          "params": ["source", "keywords"],
+          "description": "Search points of interest. `source` is a free-form app label (e.g. `mobile-skill`)."
+        },
+        {
+          "name": "route",
+          "url": "androidamap://route?sourceApplication={source}&slat={slat}&slon={slon}&dlat={dlat}&dlon={dlon}&t=0",
+          "params": ["source", "slat", "slon", "dlat", "dlon"],
+          "description": "Route from start (slat, slon) to destination (dlat, dlon). `t=0` = driving."
+        }
+      ]
+    }
+  }
+}

@@ -91,6 +91,31 @@ msk --json app open com.android.settings --session <id>
 - Observe after every action. Verify uncertain results visually and never retry a side-effecting action blindly.
 - If `post_action_observe_failed` reports `action_applied: true`, run a standalone `observe`; do not repeat the action.
 
+## Deep Links
+
+Some Android apps expose URI schemes (e.g. `bilibili://search?keyword=X`) that jump directly to a specific screen. When the task target has a known deep link, prefer it over GUI navigation: fewer steps, no coordinate grounding, robust across UI redesigns.
+
+Discovery:
+
+```bash
+msk --json app registry [<package>]         # curated URL templates shipped with mobile-skill
+msk --json app schemes <package>            # URI schemes the app declares in its manifest
+```
+
+The registry ships a small curated set (Bilibili, Taobao, Alipay, WeChat, Amap). Any listed template's `params` are the `{placeholders}` you fill in. For apps not in the registry, `schemes` tells you which URI schemes the app is willing to receive; you still need to know the exact path (from public docs, prior knowledge, or by falling back to GUI).
+
+Invocation:
+
+```bash
+msk --json app open-url "bilibili://search?keyword=Minecraft" --session <id> --observe-after
+```
+
+- The URL is pre-validated with `pm resolve-activity` before invocation. Unresolvable URLs raise `deeplink_unresolvable` and never fire — do not retry the exact same URL; either verify the scheme with `msk app schemes <package>` or fall back to GUI.
+- URLs containing `pay`, `transfer`, `send`, `publish`, or `share` are blocked with `deeplink_requires_human` unless the exact URL matches a curated template. For those, route through `request-help`.
+- Always open the returned `next_observation.path` and visually verify the landing screen is what you expected. `am start` may accept a URL but land on a login wall, an error page, or a fallback deep-link handler. If the destination is wrong, do not chain further actions — reset with `home` and try GUI.
+
+Prefer deep link when: the registry has the entry, or the destination is a stable in-app screen (search, item, profile, video). Prefer GUI when: the destination is inside a workflow that needs user state (login, cart, chat), or when deep-link attempts already failed once for this URL.
+
 ## Human Takeover
 
 Pause for passwords, OTPs, PINs, biometrics, payments, private information, or permission decisions:
