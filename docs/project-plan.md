@@ -14,6 +14,7 @@ Provide reliable screenshot-driven Android GUI navigation for local coding Agent
 - Skill installation from a source checkout for registered harnesses — Claude Code, Codex, Cursor, OpenClaw, CodeBuddy, WorkBuddy, Pi, Hermes, Kimi Code (`msk install --list`) — plus `msk install --home <dir>` for any agent with the same `<home>/skills/<name>/SKILL.md` convention
 - Automatic cleanup of stopped/idle sessions and orphaned screenshots
 - Deep-link discovery and invocation: `msk app schemes` (dumpsys-based), `msk app registry` (curated + learned templates), `msk app open-url` (pre-checked via `pm resolve-activity`, sensitive URLs blocked, post-invocation landing verified against foreground activity). Self-evolution: successful invocations are normalized to structural templates (`bilibili://space/{...}`, never concrete URLs) and accumulated in `~/.local/state/mobile-skill/learned_deeplinks.json` with `invocations` / `verified` / `hijacked` counters that `msk app registry` overlays onto curated entries.
+- Automated test suite covering coordinate mapping, IME dispatch, cleanup, observation staleness, deep-link normalization/invariants/learning, session lifecycle, and CLI dispatch — pytest-based, no real-device required (`pip install -r requirements-dev.txt && pytest`).
 
 ## Not supported
 
@@ -48,8 +49,7 @@ Session + observation state (~/.local/state/mobile-skill/)
 
 ## Next priorities
 
-1. **Automated test suite.** Pure-function tests for coordinate mapping, IME dispatch, cleanup, and observation staleness — locks the harness contract so every change no longer requires a real-device run.
-2. **Evaluation matrix.** ~20 representative tasks × 2–3 frontier models × configurations (476px vision, 768px vision, accessibility-tree channel where applicable). The data decides whether a structured-sensing fallback belongs in the primary path, and whether a text-only mode is viable enough to broaden model support.
-3. **Raise the model image width from 476 to 768** and expose it as configuration once the eval baseline exists.
-4. **Bounded composite actions** (`scroll-until` with a swipe cap) once the eval identifies where composite steps outperform single-atomic-step chains.
-5. **Wi-Fi ADB pairing and multi-device selection.**
+1. **Evaluation matrix.** ~20 representative tasks × 2–3 frontier models × configurations (476px vision, 768px vision, accessibility-tree channel where applicable). The data decides whether a structured-sensing fallback belongs in the primary path, and whether a text-only mode is viable enough to broaden model support.
+2. **Raise the model image width from 476 to 768** and expose it as configuration once the eval baseline exists.
+3. **Bounded composite actions** (`scroll-until` with a swipe cap) once the eval identifies where composite steps outperform single-atomic-step chains.
+4. **Wi-Fi ADB pairing and multi-device selection.**

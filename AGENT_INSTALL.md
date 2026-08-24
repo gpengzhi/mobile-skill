@@ -58,3 +58,12 @@ Tell the user to unlock the phone and accept the USB debugging dialog; `onboard`
 ## Report to the user
 
 State which checks passed or failed, and whether the phone needed authorization. On success, the user can start a first task — for example: "Use mobile-skill to open Settings and tell me what screen is visible."
+
+## Developer notes
+
+Contributors can install the dev extras and run the pytest suite (no device required):
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pytest -q
+```
