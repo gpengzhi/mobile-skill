@@ -22,10 +22,10 @@ Define the user's success condition before acting. Complete only the requested b
 Before the first Session, after environment changes, or when diagnosing failures, run the relevant check:
 
 ```bash
-msk doctor --agent AGENT_NAME
+msk --json doctor --agent codex
 ```
 
-Use `msk doctor` when no Agent-specific check applies. Treat `vision=unverified` as normal; static checks cannot verify image understanding. Use `msk devices` and `msk session list` only for troubleshooting.
+Replace `codex` with the actual registered harness name when running under another agent; never run the placeholder literally. Use `msk --json doctor` when no Agent-specific check applies. Treat `vision=unverified` as normal; static checks cannot verify image understanding. Use `msk devices` and `msk session list` only for troubleshooting.
 
 If the device is missing, unauthorized, or offline, ask the user to unlock it and accept USB debugging, then run `msk --json onboard --timeout 60` followed by `msk doctor`.
 
@@ -68,7 +68,7 @@ msk --json swipe X1 Y1 X2 Y2 --duration 350 --session SESSION_ID --observation O
 Other Session actions:
 
 ```bash
-msk --json wait --duration 500 --session SESSION_ID
+msk --json wait --duration 500 --session SESSION_ID --observe-after
 msk --json type "text" --session SESSION_ID
 msk --json press return --session SESSION_ID
 msk --json home --session SESSION_ID
@@ -85,6 +85,8 @@ msk --json sequence --session SESSION_ID --observation OBSERVATION_ID \
   --observe-after
 ```
 
+- Coordinate arguments are positional: use `tap X Y --session ... --observation ...`; the flag is `--observation`, not `--observation-id`.
+- `wait` takes `--duration` in milliseconds; do not substitute an unrecognized flag such as `--ms`.
 - Use `sequence` for stable same-frame actions such as tapping two independent controls that do not navigate or open a dialog. Do not use it to chain a tap, a new observation-dependent choice, and a navigation action.
 - A sequence is not a conditional program: it cannot inspect an intermediate screen or choose a new coordinate. Put every navigation, text submission, sort/filter change, and target selection that changes the screen in its own observe-act cycle.
 - Tap near the center of a visible target. If the next image is unchanged, re-estimate from that fresh image; do not repeat the same coordinate.
@@ -93,6 +95,7 @@ msk --json sequence --session SESSION_ID --observation OBSERVATION_ID \
 - Confirm focus before `type`; for Unicode, first confirm `checks.input.unicode.status=ready`. If `unicode_input_unavailable` occurs, do not retry—request user takeover.
 - Successful `type` means input was dispatched, not received. Re-observe and verify the text. If absent, fix focus instead of typing again.
 - Before replacing text in a field, clear the old value first. Prefer the visible clear control; otherwise use a focused select-all/delete action supported by the current screen. Verify that only the intended new value is present before submitting.
+- For toggle controls such as like, save, or follow, inspect the current state before tapping. If the requested state is already active, leave it unchanged; tapping again may undo it. If inactive, tap once and verify the active state.
 - Use `press` for `enter`, `return`, `space`, `backspace`, `delete`, `tab`, `escape`, `volume-up`, or `volume-down`; use dedicated actions for navigation.
 - Keep a sequence to at most five actions. Terminal actions — `swipe`, `home`, `back`, `app-switcher`, app launch, deep-link launch, `press enter`, `press return` — must be the last step.
 - A sequence is a model-declared stable-frame assumption, not proof that every action succeeded. Use `--observe-after`, inspect the returned image, and if a sequence stops or reports an uncertain result, observe before continuing and never retry the whole sequence blindly.
