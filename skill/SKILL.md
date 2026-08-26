@@ -13,7 +13,7 @@ Define the user's success condition before acting. Complete only the requested b
 
 ## Efficiency Defaults
 
-1. Inspect the app registry before GUI navigation. Use a curated deep-link template whenever it directly reaches the requested destination; otherwise use GUI navigation. Do not reject a verified destination merely because it contains user-supplied parameters.
+1. Discover the exact package with `apps list --user-visible` when needed, then inspect that package's app registry before GUI navigation. Use a curated deep-link template whenever it directly reaches the requested destination; otherwise use GUI navigation. Do not reject a verified destination merely because it contains user-supplied parameters.
 2. When two or more independent visible targets are stable in the latest observation, use one bounded `sequence` of at most five actions. Split actions only when an earlier action may navigate, open a dialog, change the layout, invalidate coordinates, or make the next action conditional. Always verify the resulting observation.
 3. For side-effecting actions, a sequence is allowed only when the user has authorized all of them and the targets are independent and remain fixed in the same frame. Otherwise perform and verify each action separately.
 
@@ -22,17 +22,17 @@ Define the user's success condition before acting. Complete only the requested b
 Before the first Session, after environment changes, or when diagnosing failures, run the relevant check:
 
 ```bash
-msk --json doctor --agent codex
+msk --json doctor --agent HARNESS_NAME
 ```
 
-Replace `codex` with the actual registered harness name when running under another agent; never run the placeholder literally. Use `msk --json doctor` when no Agent-specific check applies. Treat `vision=unverified` as normal; static checks cannot verify image understanding. Use `msk devices` and `msk session list` only for troubleshooting.
+Replace `HARNESS_NAME` with your registered harness (e.g., `codex`, `claude-code`, `cursor`). Use `msk --json doctor` when no Agent-specific check applies. Treat `vision=unverified` as normal; static checks cannot verify image understanding. Use `msk devices` and `msk session list` only for troubleshooting.
 
 If the device is missing, unauthorized, or offline, ask the user to unlock it and accept USB debugging, then run `msk --json onboard --timeout 60` followed by `msk doctor`.
 
 ## Required Loop
 
 1. Start with `msk --json session start`. If an existing session owns the device, inspect its state and reuse it only when it is clearly the current task; otherwise do not interrupt it or start a competing session.
-2. Run `msk --json observe --session SESSION_ID` and open the returned `path` with the host image tool.
+2. If the destination package is unknown, run `msk --json apps list --user-visible`; then run `msk --json app registry PACKAGE_NAME` before coordinate navigation. Prefer a matching curated destination template and launch it with `--observe-after`; otherwise launch the exact package with `app open --observe-after`, or observe the current app state and open the returned `path` before choosing coordinates.
 3. Inspect the image, then execute one action or one bounded sequence using that observation's `observation_id`.
 4. Prefer `--observe-after`; open `next_observation.path` before choosing the next coordinate action. Otherwise observe again.
 5. After navigation, text entry, filtering, or a side effect, verify the new state before continuing. A command succeeding only means the input was dispatched, not that the UI accepted it.
@@ -52,7 +52,7 @@ If the device is missing, unauthorized, or offline, ask the user to unlock it an
 - For a list, define the visible stopping condition before scrolling: target found, explicit end marker, or a verified sort/filter result. Do not treat one unchanged swipe or one missed OCR/text cue as proof that the list is exhausted.
 - After every swipe, wait for motion to settle, observe, and open the new image. Never reuse coordinates from the previous list position.
 - A successful command means the input was dispatched, not that the UI changed. If the image is unchanged, first check focus, loading, lock state, and whether the target was actually tappable; do not blindly repeat the same action.
-- On `action_result_unknown`, `post_action_observe_failed` with `action_applied: true`, `session_busy`, lock, disconnect, or active user control: observe or wait as instructed, then recover from the latest image. Never replay the whole sequence blindly.
+- On lock, disconnect, or active user control, observe or wait as instructed, then recover from the latest image before continuing.
 
 ## Actions
 
@@ -69,12 +69,12 @@ Other Session actions:
 
 ```bash
 msk --json wait --duration 500 --session SESSION_ID --observe-after
-msk --json type "text" --session SESSION_ID
-msk --json press return --session SESSION_ID
-msk --json home --session SESSION_ID
-msk --json back --session SESSION_ID
-msk --json app-switcher --session SESSION_ID
-msk --json app open PACKAGE_NAME --session SESSION_ID
+msk --json type "text" --session SESSION_ID --observe-after
+msk --json press return --session SESSION_ID --observe-after
+msk --json home --session SESSION_ID --observe-after
+msk --json back --session SESSION_ID --observe-after
+msk --json app-switcher --session SESSION_ID --observe-after
+msk --json app open PACKAGE_NAME --session SESSION_ID --observe-after
 ```
 
 When several visible targets are stable in the same screenshot, batch them in a bounded `sequence`:
@@ -93,8 +93,12 @@ msk --json sequence --session SESSION_ID --observation OBSERVATION_ID \
 - Use `double-tap` only when required. To browse down, swipe upward within a safe scrollable area.
 - `wait` is a fixed delay, not stability detection. Use `--settle-ms 0..60000` only when the default settling delay is unsuitable.
 - Confirm focus before `type`; for Unicode, first confirm `checks.input.unicode.status=ready`. If `unicode_input_unavailable` occurs, do not retry—request user takeover.
+- When direct Unicode input is unavailable but the visible keyboard/IME offers an ASCII-to-Unicode candidate list, an ASCII pinyin or transliteration entry is allowed only if the intended candidate is visibly selected and the resulting target text is verified. If composition is unavailable or ambiguous, request user takeover rather than guessing.
 - Successful `type` means input was dispatched, not received. Re-observe and verify the text. If absent, fix focus instead of typing again.
-- Before replacing text in a field, clear the old value first. Prefer the visible clear control; otherwise use a focused select-all/delete action supported by the current screen. Verify that only the intended new value is present before submitting.
+- Before replacing text in a field, clear the old value first. Prefer the visible clear control; otherwise use a focused select-all/delete action that the current screen visibly supports. Do not invent unsupported key combinations such as `CTRL+A`, and do not assume `type` replaces existing text. Verify that only the intended new value is present before submitting.
+- When a requested setting label is not shown exactly, inspect all visible choices before selecting. Map a colloquial request to a nearby label only when the ordering makes the mapping unambiguous, and report the exact label selected; if multiple choices are plausible, ask for clarification instead of silently choosing.
+- For pinyin or transliteration search, do not submit the raw Latin text. Select the intended visible candidate first, then verify the native-language query in the field and/or results.
+- For timers, pickers, sliders, and toggles, verify the committed value or active state in the resulting UI (for example, an active countdown or displayed percentage), not merely that the input was dispatched.
 - For toggle controls such as like, save, or follow, inspect the current state before tapping. If the requested state is already active, leave it unchanged; tapping again may undo it. If inactive, tap once and verify the active state.
 - Use `press` for `enter`, `return`, `space`, `backspace`, `delete`, `tab`, `escape`, `volume-up`, or `volume-down`; use dedicated actions for navigation.
 - Keep a sequence to at most five actions. Terminal actions — `swipe`, `home`, `back`, `app-switcher`, app launch, deep-link launch, `press enter`, `press return` — must be the last step.
@@ -114,7 +118,7 @@ msk --json app open-url "DEEP_LINK_URL" --session SESSION_ID --observe-after
 
 - `registry` returns curated and locally learned templates. Fill only their declared placeholders.
 - Check `registry` first and prefer a matching curated entry over manually reproducing the same destination. Replace only declared placeholders and URL-encode parameter values when needed. After invoking the resulting URL, inspect the landing image before doing anything else.
-- If no curated template directly reaches the requested destination, use `app open` or GUI navigation. If a curated deep link is unresolvable or lands on the wrong screen, try no speculative variants; fall back to GUI for that task.
+- If no curated template directly reaches the requested destination, use `app open` or GUI navigation.
 - `schemes` reveals accepted URI schemes, not valid routes. The Agent may try one unregistered deep link only when it knows the complete URL from reliable context, public documentation, or prior knowledge. Never guess, enumerate, or fuzz routes from a scheme alone.
 - URLs are pre-validated with `pm resolve-activity`. On `deeplink_unresolvable`, or if the page is wrong, do not try speculative variants; fall back to GUI.
 - URLs containing `pay`, `transfer`, `send`, `publish`, or `share` raise `deeplink_requires_human` unless they match a curated template; route them through `request-help`.
