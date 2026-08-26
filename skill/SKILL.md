@@ -13,7 +13,7 @@ Define the user's success condition before acting. Complete only the requested b
 
 ## Efficiency Defaults
 
-1. Discover the exact package with `apps list --user-visible` when needed, then inspect that package's app registry before GUI navigation. Use a curated deep-link template whenever it directly reaches the requested destination; otherwise use GUI navigation. Do not reject a verified destination merely because it contains user-supplied parameters.
+1. Discover the exact package with `apps list --user-visible` when needed, then inspect that package's app registry before GUI navigation. If the target app is not installed, open the system app market, search for the app, and install it before continuing; after installation, rerun `apps list --user-visible` and verify the exact package. Pause for login, permission, payment, or other user-only prompts rather than bypassing them. Use a curated deep-link template whenever it directly reaches the requested destination; otherwise use GUI navigation. Do not reject a verified destination merely because it contains user-supplied parameters.
 2. When two or more independent visible targets are stable in the latest observation, use one bounded `sequence` of at most five actions. Split actions only when an earlier action may navigate, open a dialog, change the layout, invalidate coordinates, or make the next action conditional. Always verify the resulting observation.
 3. For side-effecting actions, a sequence is allowed only when the user has authorized all of them and the targets are independent and remain fixed in the same frame. Otherwise perform and verify each action separately.
 
@@ -32,7 +32,7 @@ If the device is missing, unauthorized, or offline, ask the user to unlock it an
 ## Required Loop
 
 1. Start with `msk --json session start`. If an existing session owns the device, inspect its state and reuse it only when it is clearly the current task; otherwise do not interrupt it or start a competing session.
-2. If the destination package is unknown, run `msk --json apps list --user-visible`; then run `msk --json app registry PACKAGE_NAME` before coordinate navigation. Prefer a matching curated destination template and launch it with `--observe-after`; otherwise launch the exact package with `app open --observe-after`, or observe the current app state and open the returned `path` before choosing coordinates.
+2. If the destination package is unknown, run `msk --json apps list --user-visible`. If the target app is absent, use the system app market to search for and install it, verify the installation by rerunning `msk --json apps list --user-visible`, and only then continue. If the market is unavailable or presents a user-only prompt, stop and request help. For an installed app, run `msk --json app registry PACKAGE_NAME` before coordinate navigation. Prefer a matching curated destination template and launch it with `--observe-after`; otherwise launch the exact package with `app open --observe-after`, or observe the current app state and open the returned `path` before choosing coordinates.
 3. Inspect the image, then execute one action or one bounded sequence using that observation's `observation_id`.
 4. Prefer `--observe-after`; open `next_observation.path` before choosing the next coordinate action. Otherwise observe again.
 5. After navigation, text entry, filtering, or a side effect, verify the new state before continuing. A command succeeding only means the input was dispatched, not that the UI accepted it.
