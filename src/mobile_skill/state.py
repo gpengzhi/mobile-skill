@@ -201,7 +201,8 @@ def cleanup(
         current_time = current_time.replace(tzinfo=timezone.utc)
     current_time = current_time.astimezone(timezone.utc)
     cutoff = current_time - timedelta(days=days)
-    idle_cutoff = current_time - timedelta(seconds=idle_session_ttl_s())
+    idle_ttl_s = idle_session_ttl_s()
+    idle_cutoff = current_time - timedelta(seconds=idle_ttl_s)
     with _locked():
         value = _read()
         screenshots_root = home() / "screenshots"
@@ -263,7 +264,7 @@ def cleanup(
     return {
         "dry_run": dry_run,
         "retention_days": days,
-        "idle_session_ttl_s": idle_session_ttl_s(),
+        "idle_session_ttl_s": idle_ttl_s,
         "cutoff": cutoff.isoformat(timespec="seconds"),
         "sessions_idle_stopped": sessions_idle_stopped,
         "sessions_pruned": sessions_to_remove,

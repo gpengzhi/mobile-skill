@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 310" role="img" aria-labelledby="title description">
   <title id="title">How mobile-skill works</title>
-  <desc id="description">The agent observes and verifies the phone, checks whether the goal is complete, then chooses a reusable deep link, a trusted new deep link, or one atomic GUI action. Every action returns to observation and verification.</desc>
+  <desc id="description">The agent observes and verifies the phone, checks whether the goal is complete, then chooses a reusable deep link, a trusted new deep link, or a GUI action — a single tap/swipe/type or a bounded sequence of up to five. Every action returns to observation and verification.</desc>
   <defs>
     <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
       <path d="M0 0L8 4L0 8Z" fill="#6e7781"/>
@@ -50,8 +50,8 @@
   <text class="detail" x="812" y="158">Try once and learn pattern</text>
 
   <rect x="699" y="195" width="226" height="64" rx="12" fill="#f6f8fa" stroke="#57606a" stroke-width="2"/>
-  <text class="label" x="812" y="222">Atomic GUI action</text>
-  <text class="detail" x="812" y="243">Tap, swipe, type, or navigate</text>
+  <text class="label" x="812" y="222">GUI action or sequence</text>
+  <text class="detail" x="812" y="243">Tap, swipe, type — up to 5 per call</text>
 
   <text class="edge-label" x="347" y="45">Yes</text>
   <text class="edge-label" x="415" y="133">No</text>

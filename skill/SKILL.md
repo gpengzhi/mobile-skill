@@ -48,7 +48,7 @@ msk --json long-press X Y --duration 800 --session <id> --observation <obs-id> -
 msk --json swipe X1 Y1 X2 Y2 --duration 350 --session <id> --observation <obs-id> --observe-after
 ```
 
-Other Session actions include:
+Other Session actions:
 
 ```bash
 msk --json wait --duration 500 --session <id>
@@ -60,14 +60,24 @@ msk --json app-switcher --session <id>
 msk --json app open com.android.settings --session <id>
 ```
 
+When several visible targets are stable in the same screenshot, batch them in a bounded `sequence`:
+
+```bash
+msk --json sequence --session <id> --observation <obs-id> \
+  --actions '[{"type":"tap","x":620,"y":780},{"type":"tap","x":700,"y":780}]' \
+  --observe-after
+```
+
 - Tap near the center of a visible target. If the next image is unchanged, re-estimate from that fresh image; do not repeat the same coordinate.
 - Use `double-tap` only when required. To browse down, swipe upward within a safe scrollable area.
 - `wait` is a fixed delay, not stability detection. Use `--settle-ms 0..60000` only when the default settling delay is unsuitable.
 - Confirm focus before `type`; for Unicode, first confirm `checks.input.unicode.status=ready`. If `unicode_input_unavailable` occurs, do not retry—request user takeover.
 - Successful `type` means input was dispatched, not received. Re-observe and verify the text. If absent, fix focus instead of typing again.
 - Use `press` for `enter`, `return`, `space`, `backspace`, `delete`, `tab`, `escape`, `volume-up`, or `volume-down`; use dedicated actions for navigation.
+- Keep a sequence to at most five actions. Terminal actions — `swipe`, `home`, `back`, `app-switcher`, app launch, deep-link launch, `press enter`, `press return` — must be the last step.
+- A sequence is a model-declared stable-frame assumption, not proof that every action succeeded. Use `--observe-after`, inspect the returned image, and if a sequence stops or reports an uncertain result, observe before continuing and never retry the whole sequence blindly.
 - Pass the exact installed package to `app open`; never guess. If unknown or `app_not_found`, use `msk --json apps list --user-visible` or locate the app visually from `home`.
-- Observe after every action. Never blindly repeat a side-effecting action. On `action_result_unknown`, or if `post_action_observe_failed` says `action_applied: true`, observe instead of repeating the action. On `session_busy`, wait for the active command to finish, then observe.
+- Observe after every action or completed bounded sequence. Never blindly repeat a side-effecting action. On `action_result_unknown`, or if `post_action_observe_failed` says `action_applied: true`, observe instead of repeating the action. On `session_busy`, wait for the active command to finish, then observe.
 
 ## Deep Links
 
@@ -93,7 +103,7 @@ Successful invocations are generalized into structural templates, never stored w
 - `hijacked`: landed in another package; do not reuse blindly.
 - `unknown`: landing package was not observable; treat as weak evidence.
 
-A learned template may over-generalize fixed values such as feature-code IDs. If a filled template fails once, fall back to GUI or curated entries. Remove bad learned data with:
+A learned template may over-generalize a value that should have stayed fixed. If a filled template fails once, fall back to GUI or curated entries. Remove bad learned data with:
 
 ```bash
 msk --json app registry [<package>] --forget "<exact url template>"

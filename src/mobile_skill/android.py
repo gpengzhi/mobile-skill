@@ -550,13 +550,7 @@ def input_capabilities(serial: str) -> dict[str, object]:
 def press(
     serial: str, key: str, *, before_dispatch: Callable[[], None] | None = None
 ) -> None:
-    normalized = key.lower()
-    code = KEYS.get(normalized)
-    if code is None and len(normalized) == 1 and normalized.isalnum():
-        code = normalized.upper()
-    if code is None:
-        supported = ", ".join(sorted(KEYS))
-        raise AndroidError(f"unsupported Android key {key!r}; supported keys: {supported}")
+    code = key_code(key)
     run_action_adb(
         "shell",
         "input",
@@ -565,6 +559,17 @@ def press(
         serial=serial,
         before_dispatch=before_dispatch,
     )
+
+
+def key_code(key: str) -> str:
+    normalized = key.lower()
+    code = KEYS.get(normalized)
+    if code is None and len(normalized) == 1 and normalized.isalnum():
+        code = normalized.upper()
+    if code is None:
+        supported = ", ".join(sorted(KEYS))
+        raise AndroidError(f"unsupported Android key {key!r}; supported keys: {supported}")
+    return code
 
 
 def home(serial: str, *, before_dispatch: Callable[[], None] | None = None) -> None:

@@ -70,6 +70,19 @@ def test_default_settle_covers_every_action() -> None:
     assert set(cli.DEFAULT_SETTLE_MS) == expected
 
 
+def test_sequence_terminal_settle_covers_supported_action_types() -> None:
+    from mobile_skill import sequence
+
+    assert set(cli.SEQUENCE_TERMINAL_SETTLE_MS) == sequence.SUPPORTED_ACTIONS
+
+
+def test_settle_request_uses_injected_default_ms() -> None:
+    ns = _ns(command="sequence", observe_after=True, settle_ms=None)
+    ms, source = cli._settle_request(ns, default_ms=1234)
+    assert ms == 1234
+    assert source == "default"
+
+
 @pytest.mark.parametrize("device_size", [(1080, 2400), (1440, 3200), (720, 1600)])
 def test_device_point_corners(device_size: tuple[int, int]) -> None:
     observation = {"width": device_size[0], "height": device_size[1]}

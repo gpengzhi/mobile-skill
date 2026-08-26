@@ -9,6 +9,7 @@ Provide reliable screenshot-driven Android GUI navigation for local coding Agent
 - USB ADB device discovery, validation, and first-run onboarding (`msk onboard`)
 - Screenshot capture, JPEG compression, and normalized `0..999` coordinate mapping
 - Tap, double-tap, long-press, swipe, wait, text input, key presses, app launch
+- Model-declared bounded action sequences with a five-action limit, terminal-action ordering, partial-failure reporting, and optional final observation
 - Installed-app inventory (`msk apps list`) as a text-based fallback when a package name is unknown
 - Session lease with observation-staleness protection, pause/resume, human takeover, and idle-timeout cleanup
 - Skill installation from a source checkout for registered harnesses — Claude Code, Codex, Cursor, OpenClaw, CodeBuddy, WorkBuddy, Pi, Hermes, Kimi Code (`msk install --list`) — plus `msk install --home <dir>` for any agent with the same `<home>/skills/<name>/SKILL.md` convention

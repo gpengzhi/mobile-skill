@@ -379,6 +379,11 @@ def is_sensitive_url(url: str) -> bool:
     return any(keyword in lowered for keyword in SENSITIVE_KEYWORDS)
 
 
+def blocks_sensitive_url(url: str) -> bool:
+    """True if `open_url` would refuse this URL as sensitive-and-uncurated."""
+    return is_sensitive_url(url) and not _url_matches_curated_template(url)
+
+
 def open_url(
     serial: str,
     url: str,
@@ -388,7 +393,7 @@ def open_url(
     """Invoke a deep link. Raises on sensitive-URL block or unresolvable URL."""
     if not url or url.strip() != url:
         raise MobileSkillError("invalid_url", "URL must be a non-empty trimmed string")
-    if is_sensitive_url(url) and not _url_matches_curated_template(url):
+    if blocks_sensitive_url(url):
         raise MobileSkillError(
             "deeplink_requires_human",
             f"URL contains a sensitive keyword and is not in the curated registry: {url}",
@@ -492,7 +497,7 @@ def finalize_open_url(
     # (e.g. `alipays://platformapi/startapp?appId=10000007` — the URL
     # contains "pay" because the scheme is `alipays`, not because the
     # operation is a payment).
-    if (is_sensitive_url(url) or is_sensitive_url(template)) and not _url_matches_curated_template(url):
+    if blocks_sensitive_url(url):
         return {"actual_activity": actual, "outcome": outcome, "recorded": False}
 
     if not passes_template_invariant(template):

@@ -66,6 +66,16 @@ msk --json session stop <id>
 
 Coordinates use a normalized `0..999` space, so the agent's actions remain independent of the physical screen resolution.
 
+When several visible targets are stable in the same screenshot, the agent may use a bounded action sequence to reduce round trips:
+
+```bash
+msk --json sequence --session <id> --observation <obs-id> \
+  --actions '[{"type":"tap","x":620,"y":780},{"type":"tap","x":700,"y":780}]' \
+  --observe-after
+```
+
+Sequences contain at most five actions and stop on the first failure. They are a model-declared stable-frame assumption, not a replacement for verification: inspect `next_observation`, and never blindly retry a sequence with an uncertain result.
+
 ## Deep Links That Learn
 
 The built-in registry currently contains **25 templates across 9 Android apps**: Bilibili, Zhihu, Kuaishou, Taobao, Xianyu, Amap, Weibo, Alipay, and WeChat.
@@ -109,10 +119,10 @@ Run `msk doctor --agent <name>` to verify the CLI, Skill path, device, screensho
 - Android only. iOS is not supported.
 - USB ADB only. Wi-Fi pairing is not supported yet.
 - One active Session per device. Use `--device` when several phones are connected.
-- No OCR, accessibility tree, UIAutomator tree, or element selectors
-- Visual precision depends on the model and screenshot resolution
+- No OCR, accessibility tree, UIAutomator tree, or element selectors.
+- Visual precision depends on the model and screenshot resolution.
 
-## Project references:
+## Project References
 
 - [`AGENT_INSTALL.md`](AGENT_INSTALL.md) — Agent-driven installation workflow
 - [`skill/SKILL.md`](skill/SKILL.md) — runtime behavior and safety contract

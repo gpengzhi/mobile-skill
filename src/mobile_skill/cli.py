@@ -10,7 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import android, deeplinks, diagnostics, installer, observations, onboard, state
+from . import android, deeplinks, diagnostics, installer, observations, onboard, sequence, state
 from . import __version__
 from .errors import MobileSkillError
 
@@ -31,6 +31,25 @@ DEFAULT_SETTLE_MS = {
     "back": 900,
     "app-switcher": 900,
     "app": 1500,
+}
+# Per-terminal-action settle defaults for `sequence`. Values mirror
+# DEFAULT_SETTLE_MS so a sequence whose last step is `swipe` settles like a
+# standalone `swipe`; `app-open`/`open-url` map onto the `app` command's
+# settle. Kept as a separate mapping because the sequence action namespace
+# is not identical to the CLI-command namespace (no shared `app` key).
+SEQUENCE_TERMINAL_SETTLE_MS = {
+    "tap": DEFAULT_SETTLE_MS["tap"],
+    "double-tap": DEFAULT_SETTLE_MS["double-tap"],
+    "long-press": DEFAULT_SETTLE_MS["long-press"],
+    "swipe": DEFAULT_SETTLE_MS["swipe"],
+    "wait": DEFAULT_SETTLE_MS["wait"],
+    "type": DEFAULT_SETTLE_MS["type"],
+    "press": DEFAULT_SETTLE_MS["press"],
+    "home": DEFAULT_SETTLE_MS["home"],
+    "back": DEFAULT_SETTLE_MS["back"],
+    "app-switcher": DEFAULT_SETTLE_MS["app-switcher"],
+    "app-open": DEFAULT_SETTLE_MS["app"],
+    "open-url": DEFAULT_SETTLE_MS["app"],
 }
 MAX_SETTLE_MS = 60_000
 NORMALIZED_COORDINATE_MAX = observations.NORMALIZED_COORDINATE_MAX
@@ -174,6 +193,15 @@ def build_parser() -> argparse.ArgumentParser:
     list_apps.add_argument("--user-visible", action="store_true", dest="user_visible")
     list_apps.add_argument("--device")
 
+    action_sequence = commands.add_parser(
+        "sequence", help="execute a bounded sequence of device actions"
+    )
+    _add_observation_options(action_sequence)
+    actions = action_sequence.add_mutually_exclusive_group(required=True)
+    actions.add_argument("--actions", help="JSON array of action objects")
+    actions.add_argument("--actions-file", help="read the JSON action array from a file")
+    _add_post_action_options(action_sequence)
+
     return parser
 
 
@@ -309,7 +337,9 @@ def _execute_device_action(
     return outcome
 
 
-def _settle_request(args: argparse.Namespace) -> tuple[int, str] | None:
+def _settle_request(
+    args: argparse.Namespace, *, default_ms: int | None = None
+) -> tuple[int, str] | None:
     observe_after = getattr(args, "observe_after", False)
     settle_ms = getattr(args, "settle_ms", None)
     if settle_ms is not None and not observe_after:
@@ -319,7 +349,10 @@ def _settle_request(args: argparse.Namespace) -> tuple[int, str] | None:
         )
     if not observe_after:
         return None
-    requested_ms = DEFAULT_SETTLE_MS[args.command] if settle_ms is None else settle_ms
+    if settle_ms is None:
+        requested_ms = default_ms if default_ms is not None else DEFAULT_SETTLE_MS[args.command]
+    else:
+        requested_ms = settle_ms
     if not 0 <= requested_ms <= MAX_SETTLE_MS:
         raise MobileSkillError(
             "invalid_settle_duration",
@@ -399,6 +432,232 @@ def _request_help(args: argparse.Namespace) -> dict[str, Any]:
 def _observe(args: argparse.Namespace) -> dict[str, Any]:
     with state.command_lock(args.session):
         return observations.capture(args.session, full=args.full, model_width=args.model_width)
+
+
+def _sequence_actions(args: argparse.Namespace) -> list[dict[str, Any]]:
+    if args.actions is not None:
+        raw = args.actions
+    else:
+        try:
+            raw = Path(args.actions_file).read_text(encoding="utf-8")
+        except OSError as error:
+            raise MobileSkillError(
+                "sequence_file_unreadable",
+                f"cannot read sequence actions file {args.actions_file}: {error}",
+            ) from error
+    return sequence.parse_actions(raw)
+
+
+def _execute_sequence_step(
+    action: dict[str, Any],
+    serial: str,
+    observation: dict[str, Any],
+    before_dispatch: Callable[[], None],
+) -> Any:
+    action_type = action["type"]
+    size = _device_size(observation)
+    if action_type == "tap":
+        x, y = _device_point(observation, action["x"], action["y"])
+        return android.tap(serial, x, y, size, before_dispatch=before_dispatch)
+    if action_type == "double-tap":
+        x, y = _device_point(observation, action["x"], action["y"])
+        return android.double_tap(
+            serial,
+            x,
+            y,
+            action["interval_ms"],
+            size,
+            before_dispatch=before_dispatch,
+        )
+    if action_type == "long-press":
+        x, y = _device_point(observation, action["x"], action["y"])
+        return android.long_press(
+            serial,
+            x,
+            y,
+            action["duration_ms"],
+            size,
+            before_dispatch=before_dispatch,
+        )
+    if action_type == "swipe":
+        x1, y1 = _device_point(observation, action["x1"], action["y1"])
+        x2, y2 = _device_point(observation, action["x2"], action["y2"])
+        return android.swipe(
+            serial,
+            x1,
+            y1,
+            x2,
+            y2,
+            action["duration_ms"],
+            size,
+            before_dispatch=before_dispatch,
+        )
+    if action_type == "wait":
+        before_dispatch()
+        return android.wait(action["duration_ms"])
+    if action_type == "type":
+        return android.type_text(serial, action["text"], before_dispatch=before_dispatch)
+    if action_type == "press":
+        return android.press(serial, action["key"], before_dispatch=before_dispatch)
+    if action_type == "home":
+        return android.home(serial, before_dispatch=before_dispatch)
+    if action_type == "back":
+        return android.back(serial, before_dispatch=before_dispatch)
+    if action_type == "app-switcher":
+        return android.app_switcher(serial, before_dispatch=before_dispatch)
+    if action_type == "app-open":
+        return android.launch_app(
+            serial, action["package"], before_dispatch=before_dispatch
+        )
+    if action_type == "open-url":
+        return deeplinks.open_url(
+            serial, action["url"], before_dispatch=before_dispatch
+        )
+    raise MobileSkillError("invalid_sequence_action", f"unknown action: {action_type}")
+
+
+def _execute_sequence(
+    session: dict[str, Any],
+    serial: str,
+    observation: dict[str, Any],
+    actions: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None, Any]:
+    completed: list[dict[str, Any]] = []
+    current_action: dict[str, Any] | None = None
+    current_outcome: Any = None
+    observation_invalidated = False
+
+    def before_dispatch() -> None:
+        nonlocal observation_invalidated
+        if observation_invalidated:
+            return
+        _invalidate_observation(session["id"])
+        observation_invalidated = True
+
+    try:
+        for index, action in enumerate(actions):
+            current_action = action
+            current_outcome = _execute_sequence_step(
+                action, serial, observation, before_dispatch
+            )
+            summary = sequence.action_summary(action)
+            if action["type"] == "type":
+                summary["method"] = current_outcome
+            elif action["type"] == "open-url":
+                summary.update(current_outcome)
+            completed.append(
+                {
+                    "index": index,
+                    "action": summary,
+                    "status": "dispatched",
+                }
+            )
+    except MobileSkillError as error:
+        failed_index = len(completed)
+        failed_action = sequence.action_summary(current_action or actions[failed_index])
+        details = {
+            "completed": completed,
+            "failed": {
+                "index": failed_index,
+                "action": failed_action,
+                "status": "unknown"
+                if error.details.get("action_may_have_applied")
+                else "failed",
+            },
+            "not_attempted": list(range(failed_index + 1, len(actions))),
+            "cause": error.code,
+        }
+        if error.details.get("action_may_have_applied"):
+            details["failed"]["action_may_have_applied"] = True
+            raise MobileSkillError(
+                "action_result_unknown",
+                "the action sequence stopped after an uncertain device command",
+                "observe the screen before taking another action; do not retry blindly",
+                details,
+            ) from error
+        raise MobileSkillError(
+            "sequence_failed",
+            f"the action sequence stopped at action {failed_index}",
+            "observe the screen before continuing",
+            details,
+        ) from error
+
+    return completed, current_action, current_outcome
+
+
+def _complete_sequence(
+    session: dict[str, Any],
+    serial: str,
+    observation_id: str,
+    completed: list[dict[str, Any]],
+    last_action: dict[str, Any] | None,
+    last_outcome: Any,
+    *,
+    request: tuple[int, str] | None,
+) -> dict[str, Any]:
+    result = _ok(
+        type="action_sequence",
+        session_id=session["id"],
+        device_id=serial,
+        observation_id=observation_id,
+        actions=completed,
+    )
+    if request is None:
+        return result
+
+    settle = _wait_for_settle(request)
+    result["settle"] = settle
+    try:
+        next_observation = observations.capture(session["id"], serial=serial)
+    except (MobileSkillError, OSError) as error:
+        raise MobileSkillError(
+            "post_action_observe_failed",
+            f"action sequence succeeded but the post-action observation failed: {error}",
+            f"run `msk observe --session {session['id']}`; do not repeat the sequence",
+            {
+                "action_applied": True,
+                "actions": completed,
+                "settle": settle,
+            },
+        ) from error
+    result["next_observation"] = {
+        key: value for key, value in next_observation.items() if key != "ok"
+    }
+    if last_action and last_action["type"] == "open-url":
+        resolved_activity = (
+            last_outcome.get("resolved_activity")
+            if isinstance(last_outcome, dict)
+            else None
+        )
+        result["deeplink_outcome"] = deeplinks.finalize_open_url(
+            serial=serial,
+            url=last_action["url"],
+            expected_activity=resolved_activity,
+        )
+    return result
+
+
+def _run_sequence(args: argparse.Namespace) -> dict[str, Any]:
+    actions = _sequence_actions(args)
+    terminal_type = actions[-1]["type"]
+    request = _settle_request(
+        args, default_ms=SEQUENCE_TERMINAL_SETTLE_MS[terminal_type]
+    )
+    with state.command_lock(args.session):
+        session, serial = _driver(args)
+        observation = _check_observation(session, args.observation)
+        completed, last_action, last_outcome = _execute_sequence(
+            session, serial, observation, actions
+        )
+        return _complete_sequence(
+            session,
+            serial,
+            args.observation,
+            completed,
+            last_action,
+            last_outcome,
+            request=request,
+        )
 
 
 def _device_size(observation: dict[str, Any]) -> tuple[int, int]:
@@ -629,6 +888,8 @@ def _dispatch(args: argparse.Namespace) -> Any:
         return _ok(apps=deeplinks.merged_registry(args.package))
     if args.command == "observe":
         return _observe(args)
+    if args.command == "sequence":
+        return _run_sequence(args)
     if args.command in ("tap", "double-tap", "long-press", "swipe"):
         return _run_action(args)
     return _simple_action(args)
