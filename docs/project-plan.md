@@ -20,14 +20,14 @@ Provide reliable screenshot-driven Android GUI navigation for local coding Agent
 ## Not supported
 
 - iPhone (deferred until the Android side is proven)
-- Wi-Fi ADB, multi-device selection
+- Wi-Fi ADB, simultaneous multi-device orchestration
 - OCR, UI trees, accessibility trees, element selectors
 - Daemon mode, remote devices, multi-Agent scheduling
 - Automatic handling of login, secrets, permissions, or payments
 
 ## Invariants
 
-1. One CLI command performs one observation or one atomic action.
+1. One CLI command performs one observation, one atomic action, or one bounded sequence of up to five actions.
 2. Coordinate actions require the latest viewed observation.
 3. Every successful action invalidates that observation.
 4. Action results are verified with a new screenshot.
