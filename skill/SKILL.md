@@ -7,13 +7,16 @@ description: Control a real Android phone through screenshot observation and ato
 
 Use `msk` for every device observation and action. Run exactly one `msk` command per shell invocation. Do not call ADB directly or generate control scripts.
 
+## Efficiency Defaults
+
+Before GUI navigation, prefer a verified deep link for stable destinations. When multiple independent targets are stable in the latest observation, group them into one bounded `sequence` of at most five actions. Split actions only when an earlier action may change the layout or invalidate later coordinates. Always verify the resulting observation.
+
 ## Before Starting
 
 Before the first Session, after environment changes, or when diagnosing failures, run the relevant check:
 
 ```bash
-msk doctor --agent codex
-msk doctor --agent claude-code
+msk doctor --agent AGENT_NAME
 ```
 
 Use `msk doctor` when no Agent-specific check applies. Treat `vision=unverified` as normal; static checks cannot verify image understanding. Use `msk devices` and `msk session list` only for troubleshooting.
@@ -23,11 +26,11 @@ If the device is missing, unauthorized, or offline, ask the user to unlock it an
 ## Required Loop
 
 1. Start with `msk --json session start`.
-2. Run `msk --json observe --session <id>`.
+2. Run `msk --json observe --session SESSION_ID`.
 3. Open the returned `path` with the host image tool.
-4. Inspect that image and execute one action.
+4. Inspect that image and execute one action or bounded sequence.
 5. Prefer `--observe-after`; open `next_observation.path` before the next coordinate action. Otherwise observe again.
-6. Stop with `msk --json session stop <id>`, including after errors.
+6. Stop with `msk --json session stop SESSION_ID`, including after errors.
 
 ## Visual Grounding
 
@@ -42,29 +45,29 @@ If the device is missing, unauthorized, or offline, ask the user to unlock it an
 Coordinate actions require the latest viewed observation:
 
 ```bash
-msk --json tap X Y --session <id> --observation <obs-id> --observe-after
-msk --json double-tap X Y --interval 100 --session <id> --observation <obs-id> --observe-after
-msk --json long-press X Y --duration 800 --session <id> --observation <obs-id> --observe-after
-msk --json swipe X1 Y1 X2 Y2 --duration 350 --session <id> --observation <obs-id> --observe-after
+msk --json tap X Y --session SESSION_ID --observation OBSERVATION_ID --observe-after
+msk --json double-tap X Y --interval 100 --session SESSION_ID --observation OBSERVATION_ID --observe-after
+msk --json long-press X Y --duration 800 --session SESSION_ID --observation OBSERVATION_ID --observe-after
+msk --json swipe X1 Y1 X2 Y2 --duration 350 --session SESSION_ID --observation OBSERVATION_ID --observe-after
 ```
 
 Other Session actions:
 
 ```bash
-msk --json wait --duration 500 --session <id>
-msk --json type "text" --session <id>
-msk --json press return --session <id>
-msk --json home --session <id>
-msk --json back --session <id>
-msk --json app-switcher --session <id>
-msk --json app open com.android.settings --session <id>
+msk --json wait --duration 500 --session SESSION_ID
+msk --json type "text" --session SESSION_ID
+msk --json press return --session SESSION_ID
+msk --json home --session SESSION_ID
+msk --json back --session SESSION_ID
+msk --json app-switcher --session SESSION_ID
+msk --json app open PACKAGE_NAME --session SESSION_ID
 ```
 
 When several visible targets are stable in the same screenshot, batch them in a bounded `sequence`:
 
 ```bash
-msk --json sequence --session <id> --observation <obs-id> \
-  --actions '[{"type":"tap","x":620,"y":780},{"type":"tap","x":700,"y":780}]' \
+msk --json sequence --session SESSION_ID --observation OBSERVATION_ID \
+  --actions '[{"type":"tap","x":X1,"y":Y1},{"type":"tap","x":X2,"y":Y2}]' \
   --observe-after
 ```
 
@@ -81,12 +84,12 @@ msk --json sequence --session <id> --observation <obs-id> \
 
 ## Deep Links
 
-Prefer a known deep link for stable destinations such as search, item, profile, or video pages. Prefer GUI for stateful workflows such as login, cart, or chat.
+Use the deep-link rules below for stable destinations. Prefer GUI for stateful workflows such as login, cart, or chat.
 
 ```bash
-msk --json app registry [<package>]
-msk --json app schemes <package>
-msk --json app open-url "bilibili://search?keyword=Minecraft" --session <id> --observe-after
+msk --json app registry PACKAGE_NAME
+msk --json app schemes PACKAGE_NAME
+msk --json app open-url "DEEP_LINK_URL" --session SESSION_ID --observe-after
 ```
 
 - `registry` returns curated and locally learned templates. Fill only their declared placeholders.
@@ -106,7 +109,7 @@ Successful invocations are generalized into structural templates, never stored w
 A learned template may over-generalize a value that should have stayed fixed. If a filled template fails once, fall back to GUI or curated entries. Remove bad learned data with:
 
 ```bash
-msk --json app registry [<package>] --forget "<exact url template>"
+msk --json app registry PACKAGE_NAME --forget "URL_TEMPLATE"
 msk --json app registry --reset-learned
 ```
 
@@ -115,10 +118,10 @@ msk --json app registry --reset-learned
 Pause for passwords, OTPs, PINs, biometrics, payments, private information, or permission decisions:
 
 ```bash
-msk --json request-help --session <id> --reason login_required --message "Please complete the user-only step on the phone."
+msk --json request-help --session SESSION_ID --reason login_required --message "Please complete the user-only step on the phone."
 ```
 
-After user confirmation, run `msk --json session resume <id>`, then observe and open a fresh image.
+After user confirmation, run `msk --json session resume SESSION_ID`, then observe and open a fresh image.
 
 ## Maintenance
 
