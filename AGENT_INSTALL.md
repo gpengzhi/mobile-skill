@@ -44,6 +44,7 @@ Success criteria:
 
 - `checks.python`, `checks.adb`, `checks.pillow`, `checks.screenshot` → `ready`
 - `checks.device` → `ready` and `status` → `ready`
+- `checks.input.unicode` → `ready`; if it reports `unavailable`, run `./msk --json setup-ime` (downloads and installs the pinned helper IME, needs network and "Install via USB"), then rerun `doctor`
 - `checks.<agent>.skill` → `ready` (restart the agent CLI so it picks up the skill)
 - `vision: unverified` is expected — static checks cannot prove the model sees images; the first real task does
 

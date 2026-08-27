@@ -327,6 +327,40 @@ def test_app_registry_uses_curated(cli_env) -> None:
     assert result["apps"][0]["entries"]
 
 
+def test_setup_ime_dispatch(cli_env, monkeypatch) -> None:
+    import hashlib
+
+    from mobile_skill import ime_setup
+
+    cli_env.when("install", returns="Success\n")
+    payload = b"fake-apk-bytes"
+    monkeypatch.setattr(ime_setup, "APK_SHA256", hashlib.sha256(payload).hexdigest())
+    monkeypatch.setattr(ime_setup, "APK_EXPECTED_BYTES", len(payload))
+
+    calls = {"n": 0}
+
+    def ime_list_reply(args, serial, binary):
+        calls["n"] += 1
+        return (
+            "com.other/.SomeIME\n"
+            if calls["n"] == 1
+            else f"com.other/.SomeIME\n{android.ADB_KEYBOARD_IME}\n"
+        )
+
+    cli_env.when("shell", "ime", "list", "-s", "-a", returns=ime_list_reply)
+
+    def download(url, destination):
+        destination.write_bytes(payload)
+        return hashlib.sha256(payload).hexdigest()
+
+    monkeypatch.setattr(ime_setup, "download_apk", download)
+    result = _run("setup-ime", "--device", "emu-1")
+    assert result["ok"] is True
+    assert result["verified"] is True
+    assert result["installed"] is True
+    assert result["source"] == "download"
+
+
 def test_app_registry_forget_and_reset(cli_env) -> None:
     # forget on empty is a no-op
     _run("app", "registry", "--forget", "custom://x")

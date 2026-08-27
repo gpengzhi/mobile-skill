@@ -10,7 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import android, deeplinks, diagnostics, installer, observations, onboard, sequence, state
+from . import android, deeplinks, diagnostics, ime_setup, installer, observations, onboard, sequence, state
 from . import __version__
 from .errors import MobileSkillError
 
@@ -70,6 +70,13 @@ def build_parser() -> argparse.ArgumentParser:
     onboard_command.add_argument("--device")
     onboard_command.add_argument("--timeout", type=int, default=60, dest="timeout_s")
     onboard_command.add_argument("--retries", type=int, default=1)
+
+    setup_ime_command = commands.add_parser("setup-ime")
+    setup_ime_command.add_argument("--device")
+    setup_ime_command.add_argument(
+        "--apk",
+        help="install a local app-uiautomator.apk instead of downloading the pinned release",
+    )
 
     install = commands.add_parser("install")
     install.add_argument("agent", nargs="?")
@@ -826,6 +833,8 @@ def _dispatch(args: argparse.Namespace) -> Any:
                 device=args.device, timeout_s=args.timeout_s, retries=args.retries
             )
         )
+    if args.command == "setup-ime":
+        return _ok(**ime_setup.setup_ime(args.device, apk_path=args.apk))
     if args.command == "install":
         if args.list_harnesses:
             return _ok(harnesses=installer.registered_harnesses())

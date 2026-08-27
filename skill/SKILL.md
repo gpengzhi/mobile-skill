@@ -92,7 +92,7 @@ msk --json sequence --session SESSION_ID --observation OBSERVATION_ID \
 - Tap near the center of a visible target. If the next image is unchanged, re-estimate from that fresh image; do not repeat the same coordinate.
 - Use `double-tap` only when required. To browse down, swipe upward within a safe scrollable area.
 - `wait` is a fixed delay, not stability detection. Use `--settle-ms 0..60000` only when the default settling delay is unsuitable.
-- Confirm focus before `type`; for Unicode, first confirm `checks.input.unicode.status=ready`. If `unicode_input_unavailable` occurs, do not retry—request user takeover.
+- Confirm focus before `type`; for Unicode, first confirm `checks.input.unicode.status=ready`. If `unicode_input_unavailable` occurs, run `msk setup-ime` to install and verify the helper IME, then retry the type action once; if `setup-ime` fails, request user takeover.
 - When direct Unicode input is unavailable but the visible keyboard/IME offers an ASCII-to-Unicode candidate list, an ASCII pinyin or transliteration entry is allowed only if the intended candidate is visibly selected and the resulting target text is verified. If composition is unavailable or ambiguous, request user takeover rather than guessing.
 - Successful `type` means input was dispatched, not received. Re-observe and verify the text. If absent, fix focus instead of typing again.
 - Before replacing text in a field, clear the old value first. Prefer the visible clear control; otherwise use a focused select-all/delete action that the current screen visibly supports. Do not invent unsupported key combinations such as `CTRL+A`, and do not assume `type` replaces existing text. Verify that only the intended new value is present before submitting.

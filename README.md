@@ -112,7 +112,7 @@ Every environment still needs:
 - a vision-capable model
 - a host tool that can open the local screenshot path returned by `observe`
 
-Run `msk doctor --agent <name>` to verify the CLI, Skill path, device, screenshot capture, and text-input capabilities. Static diagnostics report vision as `unverified`. Only a real visual task can prove the model opened and understood the image.
+Run `msk doctor --agent <name>` to verify the CLI, Skill path, device, screenshot capture, and text-input capabilities. Unicode (non-ASCII) typing needs a helper IME on the device; if `checks.input.unicode` is `unavailable`, `msk setup-ime` installs it from a pinned release (`--apk <file>` installs a hand-downloaded copy). Static diagnostics report vision as `unverified`. Only a real visual task can prove the model opened and understood the image.
 
 ## Current Limits
 

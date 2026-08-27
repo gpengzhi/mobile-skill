@@ -234,6 +234,18 @@ def test_type_ascii_uses_input_text(fake_adb) -> None:
     assert last[3] == "'hello%sworld'"
 
 
+def _bound_dumpsys() -> str:
+    return (
+        f"  mCurMethodId={android.ADB_KEYBOARD_IME}\n"
+        f"  mCurId={android.ADB_KEYBOARD_IME} "
+        "mHaveConnection=true mBoundToMethod=true\n"
+    )
+
+
+def _unbound_dumpsys() -> str:
+    return "  mCurMethodId=com.other/.SomeIME\n  mCurId=com.other/.SomeIME mHaveConnection=false\n"
+
+
 def test_type_unicode_via_adb_keyboard(fake_adb) -> None:
     fake_adb.when(
         "shell", "ime", "list", "-s", "-a",
@@ -247,6 +259,7 @@ def test_type_unicode_via_adb_keyboard(fake_adb) -> None:
         "shell", "settings", "get", "secure", "default_input_method",
         returns="com.other/.SomeIME\n",
     )
+    fake_adb.when("shell", "dumpsys", "input_method", returns=_bound_dumpsys())
     fake_adb.when(
         "shell", "am", "broadcast",
         returns="Broadcast completed: result=-1\n",
@@ -259,6 +272,106 @@ def test_type_unicode_via_adb_keyboard(fake_adb) -> None:
     assert ("shell", "ime", "disable", android.ADB_KEYBOARD_IME) in argvs
     # original ime restored
     assert ("shell", "ime", "set", "com.other/.SomeIME") in argvs
+    # broadcast only fired after the binding was confirmed via dumpsys
+    dumpsys_index = argvs.index(("shell", "dumpsys", "input_method"))
+    broadcast_index = next(
+        i
+        for i, argv in enumerate(argvs)
+        if argv[:4] == ("shell", "am", "broadcast", "-a")
+    )
+    assert dumpsys_index < broadcast_index
+
+
+def test_type_unicode_waits_for_slow_ime_binding(fake_adb) -> None:
+    fake_adb.when(
+        "shell", "ime", "list", "-s", "-a",
+        returns=f"{android.ADB_KEYBOARD_IME}\ncom.other/.SomeIME\n",
+    )
+    fake_adb.when("shell", "ime", "list", "-s", returns=f"{android.ADB_KEYBOARD_IME}\n")
+    fake_adb.when(
+        "shell", "settings", "get", "secure", "default_input_method",
+        returns="com.other/.SomeIME\n",
+    )
+    attempts = {"n": 0}
+
+    def slow_binding(args, serial, binary):
+        attempts["n"] += 1
+        return _unbound_dumpsys() if attempts["n"] < 3 else _bound_dumpsys()
+
+    fake_adb.when("shell", "dumpsys", "input_method", returns=slow_binding)
+    fake_adb.when(
+        "shell", "am", "broadcast",
+        returns="Broadcast completed: result=-1\n",
+    )
+    method = android.type_text("emu-1", "你好")
+    assert method == "adb-keyboard-broadcast"
+    # polled until the binding showed up, then broadcast
+    assert attempts["n"] == 3
+    argvs = [call["args"] for call in fake_adb.calls]
+    assert argvs[-1] == ("shell", "ime", "set", "com.other/.SomeIME")  # restored
+
+
+def test_type_unicode_waits_for_full_binding(fake_adb) -> None:
+    # mHaveConnection=true with mBoundToMethod=false: the IME is current but
+    # its service has not started; polling must keep waiting past that state
+    fake_adb.when(
+        "shell", "ime", "list", "-s", "-a",
+        returns=f"{android.ADB_KEYBOARD_IME}\ncom.other/.SomeIME\n",
+    )
+    fake_adb.when("shell", "ime", "list", "-s", returns=f"{android.ADB_KEYBOARD_IME}\n")
+    fake_adb.when(
+        "shell", "settings", "get", "secure", "default_input_method",
+        returns="com.other/.SomeIME\n",
+    )
+    half_bound = (
+        f"  mCurMethodId={android.ADB_KEYBOARD_IME}\n"
+        f"  mCurId={android.ADB_KEYBOARD_IME} "
+        "mHaveConnection=true mBoundToMethod=false\n"
+    )
+    polls = {"n": 0}
+
+    def dumpsys_reply(args, serial, binary):
+        polls["n"] += 1
+        return half_bound if polls["n"] < 3 else _bound_dumpsys()
+
+    fake_adb.when("shell", "dumpsys", "input_method", returns=dumpsys_reply)
+    fake_adb.when(
+        "shell", "am", "broadcast",
+        returns="Broadcast completed: result=-1\n",
+    )
+    method = android.type_text("emu-1", "你好")
+    assert method == "adb-keyboard-broadcast"
+    assert polls["n"] == 3  # kept polling until fully bound
+
+
+def test_type_unicode_broadcasts_after_bind_timeout(fake_adb, monkeypatch) -> None:
+    fake_adb.when(
+        "shell", "ime", "list", "-s", "-a",
+        returns=f"{android.ADB_KEYBOARD_IME}\ncom.other/.SomeIME\n",
+    )
+    fake_adb.when("shell", "ime", "list", "-s", returns=f"{android.ADB_KEYBOARD_IME}\n")
+    fake_adb.when(
+        "shell", "settings", "get", "secure", "default_input_method",
+        returns="com.other/.SomeIME\n",
+    )
+    # dumpsys never confirms the binding (format variance / slow device)
+    fake_adb.when("shell", "dumpsys", "input_method", returns=_unbound_dumpsys())
+    fake_adb.when(
+        "shell", "am", "broadcast",
+        returns="Broadcast completed: result=-1\n",
+    )
+    # advance virtual time so the poll loop times out without real waiting
+    ticks = {"n": 0}
+
+    def fake_monotonic() -> float:
+        ticks["n"] += 1
+        return ticks["n"] * 2.0
+
+    monkeypatch.setattr(android.time, "monotonic", fake_monotonic)
+    method = android.type_text("emu-1", "你好")
+    assert method == "adb-keyboard-broadcast"
+    # fell back to the fixed settle delay before broadcasting
+    assert android.ADB_KEYBOARD_POST_SWITCH_DELAY_S in fake_adb.sleeps
 
 
 def test_type_unicode_missing_keyboard(fake_adb) -> None:
@@ -278,10 +391,52 @@ def test_type_broadcast_failure(fake_adb) -> None:
         "shell", "settings", "get", "secure", "default_input_method",
         returns="null\n",
     )
+    fake_adb.when("shell", "dumpsys", "input_method", returns=_bound_dumpsys())
     fake_adb.when("shell", "am", "broadcast", returns="Broadcast completed: result=0\n")
     with pytest.raises(AndroidError) as excinfo:
         android.type_text("emu-1", "你好")
     assert excinfo.value.code == "unicode_input_failed"
+    assert excinfo.value.details["binding_state"] == {
+        "current_method": android.ADB_KEYBOARD_IME,
+        "have_connection": True,
+        "bound_to_method": True,
+        "raw_excerpt": _bound_dumpsys().strip()[-500:],
+    }
+    assert "result=0" in excinfo.value.details["broadcast_output"]
+
+
+def test_type_unicode_broadcast_retry_after_undelivered(fake_adb) -> None:
+    # a freshly installed AdbKeyboard can miss the first `ime set`: the
+    # broadcast reports result=0; re-setting the IME and retrying delivers it
+    fake_adb.when(
+        "shell", "ime", "list", "-s", "-a",
+        returns=f"{android.ADB_KEYBOARD_IME}\ncom.other/.SomeIME\n",
+    )
+    fake_adb.when("shell", "ime", "list", "-s", returns=f"{android.ADB_KEYBOARD_IME}\n")
+    fake_adb.when(
+        "shell", "settings", "get", "secure", "default_input_method",
+        returns="com.other/.SomeIME\n",
+    )
+    fake_adb.when("shell", "dumpsys", "input_method", returns=_bound_dumpsys())
+    broadcasts = {"n": 0}
+
+    def broadcast_reply(args, serial, binary):
+        broadcasts["n"] += 1
+        return (
+            "Broadcast completed: result=0\n"
+            if broadcasts["n"] == 1
+            else "Broadcast completed: result=-1\n"
+        )
+
+    fake_adb.when("shell", "am", "broadcast", returns=broadcast_reply)
+    method = android.type_text("emu-1", "你好")
+    assert method == "adb-keyboard-broadcast"
+    assert broadcasts["n"] == 2
+    argvs = fake_adb.argvs()
+    # the retry re-issued `ime set` before broadcasting again
+    assert argvs.count(("shell", "ime", "set", android.ADB_KEYBOARD_IME)) >= 2
+    # original ime restored
+    assert ("shell", "ime", "set", "com.other/.SomeIME") in argvs
 
 
 def test_type_splits_newlines(fake_adb) -> None:

@@ -49,6 +49,13 @@ ADB_KEYBOARD_INPUT_ACTION = "ADB_KEYBOARD_INPUT_TEXT"
 # fully hidden and ADBKeyboard fully bound before broadcasting text.
 ADB_KEYBOARD_PRE_SWITCH_DELAY_S = 0.25
 ADB_KEYBOARD_POST_SWITCH_DELAY_S = 0.35
+# `ime set` can return before the new IME is actually bound to the focused
+# editor (observed on HyperOS); broadcasting in that window silently drops
+# the text. Poll dumpsys for a confirmed binding instead of trusting the
+# fixed delay, but keep a timeout so devices whose dumpsys output parses
+# differently still get the broadcast attempt.
+ADB_KEYBOARD_BIND_TIMEOUT_S = 5.0
+ADB_KEYBOARD_BIND_POLL_INTERVAL_S = 0.1
 
 
 def adb_path() -> str:
@@ -406,6 +413,98 @@ def _ime_list(serial: str, *, include_all: bool) -> list[str]:
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
+def installed_imes(serial: str) -> list[str]:
+    """All IMEs installed on the device, including disabled ones."""
+    return _ime_list(serial, include_all=True)
+
+
+def _adb_keyboard_binding_state(serial: str) -> dict[str, Any]:
+    output = str(run_adb("shell", "dumpsys", "input_method", serial=serial))
+    current_method_match = re.search(r"mCurMethodId\s*=\s*(\S+)", output)
+    connection_match = re.search(r"mHaveConnection\s*=\s*(true|false)", output)
+    bound_match = re.search(r"mBoundToMethod\s*=\s*(true|false)", output)
+    return {
+        "current_method": current_method_match.group(1) if current_method_match else None,
+        "have_connection": (
+            connection_match.group(1) == "true" if connection_match else None
+        ),
+        "bound_to_method": bound_match.group(1) == "true" if bound_match else None,
+        "raw_excerpt": output.strip()[-500:],
+    }
+
+
+def _adb_keyboard_bound(serial: str) -> bool:
+    state = _adb_keyboard_binding_state(serial)
+    # mHaveConnection alone is not enough: right after `ime set` it can be
+    # true while mBoundToMethod is still false (the IME service has not
+    # actually started), and broadcasting in that window reports result=0
+    # because the receiver does not exist yet.
+    return (
+        state["current_method"] == ADB_KEYBOARD_IME
+        and state["have_connection"] is True
+        and state["bound_to_method"] is True
+    )
+
+
+def _wait_for_adb_keyboard_binding(serial: str) -> tuple[bool, dict[str, Any]]:
+    deadline = time.monotonic() + ADB_KEYBOARD_BIND_TIMEOUT_S
+    last_state: dict[str, Any] = {}
+    while True:
+        last_state = _adb_keyboard_binding_state(serial)
+        if (
+            last_state["current_method"] == ADB_KEYBOARD_IME
+            and last_state["have_connection"] is True
+            and last_state["bound_to_method"] is True
+        ):
+            return True, last_state
+        if time.monotonic() >= deadline:
+            return False, last_state
+        time.sleep(ADB_KEYBOARD_BIND_POLL_INTERVAL_S)
+
+
+def _broadcast_unicode_text(
+    serial: str,
+    encoded: str,
+    *,
+    before_dispatch: Callable[[], None] | None = None,
+    binding_state: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any] | None]:
+    """Broadcast encoded text; on an undelivered broadcast, re-set and retry once.
+
+    A freshly installed AdbKeyboard can miss the first `ime set` (observed on
+    HyperOS): its service never starts, the receiver is absent, and the
+    broadcast completes with result=0. Re-issuing `ime set` at that point
+    binds it. Retrying only when the broadcast was not delivered is safe —
+    undelivered means no text was committed anywhere.
+    """
+    output = ""
+    for attempt in range(2):
+        output = str(
+            run_action_adb(
+                "shell",
+                "am",
+                "broadcast",
+                "-a",
+                ADB_KEYBOARD_INPUT_ACTION,
+                "--es",
+                "text",
+                encoded,
+                serial=serial,
+                before_dispatch=before_dispatch,
+            )
+        )
+        if "result=-1" in output:
+            return output, binding_state
+        if attempt == 0:
+            run_action_adb(
+                "shell", "ime", "set", ADB_KEYBOARD_IME, serial=serial
+            )
+            bound, binding_state = _wait_for_adb_keyboard_binding(serial)
+            if not bound:
+                time.sleep(ADB_KEYBOARD_POST_SWITCH_DELAY_S)
+    return output, binding_state
+
+
 def _type_unicode_with_adb_keyboard(
     serial: str, text: str, *, before_dispatch: Callable[[], None] | None = None
 ) -> str:
@@ -414,7 +513,7 @@ def _type_unicode_with_adb_keyboard(
         raise AndroidError(
             "Unicode input is unavailable on this Android device",
             "unicode_input_unavailable",
-            "install and enable a supported helper IME, or use human takeover",
+            "run `msk setup-ime` to install the helper IME, then retry the type action",
         )
 
     enabled_imes = _ime_list(serial, include_all=False)
@@ -441,28 +540,29 @@ def _type_unicode_with_adb_keyboard(
             serial=serial,
             before_dispatch=before_dispatch,
         )
-        time.sleep(ADB_KEYBOARD_POST_SWITCH_DELAY_S)
+        bound, binding_state = _wait_for_adb_keyboard_binding(serial)
+        if not bound:
+            # dumpsys never confirmed the binding (output format variance or
+            # a genuinely slow switch); fall back to the fixed settle delay
+            # so the broadcast still gets a chance to land.
+            time.sleep(ADB_KEYBOARD_POST_SWITCH_DELAY_S)
         encoded = base64.b64encode(text.encode("utf-8")).decode("ascii").rstrip("=")
-        output = str(
-            run_action_adb(
-                "shell",
-                "am",
-                "broadcast",
-                "-a",
-                ADB_KEYBOARD_INPUT_ACTION,
-                "--es",
-                "text",
-                encoded,
-                serial=serial,
-                before_dispatch=before_dispatch,
-            )
+        output, binding_state = _broadcast_unicode_text(
+            serial,
+            encoded,
+            before_dispatch=before_dispatch,
+            binding_state=binding_state,
         )
         if "result=-1" not in output:
             raise AndroidError(
                 "the ADBKeyboard broadcast was not delivered",
                 "unicode_input_failed",
                 "verify the helper IME is enabled and try again",
-                {"action_may_have_applied": True},
+                {
+                    "action_may_have_applied": True,
+                    "binding_state": binding_state,
+                    "broadcast_output": output.strip()[-500:],
+                },
             )
     finally:
         if original_ime and original_ime != "null":
@@ -528,22 +628,24 @@ def input_capabilities(serial: str) -> dict[str, object]:
         run_adb("shell", "settings", "get", "secure", "default_input_method", serial=serial)
     ).strip()
     enabled_imes = _ime_list(serial, include_all=False)
-    installed_imes = _ime_list(serial, include_all=True)
-    unicode_ready = ADB_KEYBOARD_IME in installed_imes
+    all_installed_imes = installed_imes(serial)
+    unicode_ready = ADB_KEYBOARD_IME in all_installed_imes
     return {
         "ascii": {"status": "ready", "method": "adb-input-text"},
         "unicode": {
             "status": "ready" if unicode_ready else "unavailable",
             "method": "adb-keyboard" if unicode_ready else None,
             "temporary_ime_switch": unicode_ready,
-            "reason": None if unicode_ready else "no supported helper IME is installed",
+            "reason": None
+            if unicode_ready
+            else f"the helper IME {ADB_KEYBOARD_IME} is not installed",
             "hint": None
             if unicode_ready
-            else "install a supported helper IME, or use human takeover",
+            else "run `msk setup-ime` to install the helper IME, then rerun `msk doctor`",
         },
         "default_ime": default_ime,
         "enabled_imes": enabled_imes,
-        "installed_imes": installed_imes,
+        "installed_imes": all_installed_imes,
     }
 
 
